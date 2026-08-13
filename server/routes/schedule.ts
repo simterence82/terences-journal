@@ -15,7 +15,7 @@ interface ScheduleRow {
   end_time: string | null;
   location: string | null;
   notes: string | null;
-  created_by: number | null;
+  created_by: string | null;
   created_at: number;
 }
 

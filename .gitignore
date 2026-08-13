@@ -10,3 +10,6 @@ data/
 .env
 .env.local
 .DS_Store
+server/firebase-service-account.json
+firebase-service-account*.json
+*.serviceAccountKey.json

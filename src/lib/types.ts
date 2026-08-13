@@ -1,7 +1,7 @@
 export type UserRole = "admin" | "member";
 
 export interface User {
-  id: number;
+  id: string;
   email: string;
   displayName: string;
   role: UserRole;
@@ -21,7 +21,7 @@ export interface LightingPurchase {
   paidToSeller: boolean;
   reimbursed: boolean;
   notes: string | null;
-  createdBy: number | null;
+  createdBy: string | null;
   createdAt: string;
 }
 
@@ -33,7 +33,7 @@ export interface BlumPurchase {
   paidToSeller: boolean;
   reimbursed: boolean;
   notes: string | null;
-  createdBy: number | null;
+  createdBy: string | null;
   createdAt: string;
 }
 
@@ -49,7 +49,7 @@ export interface Task {
   assignedTo: string | null;
   fileName: string | null;
   fileType: string | null;
-  createdBy: number | null;
+  createdBy: string | null;
   createdAt: string;
 }
 
@@ -60,7 +60,7 @@ export interface Issue {
   resolved: boolean;
   fileName: string | null;
   fileType: string | null;
-  createdBy: number | null;
+  createdBy: string | null;
   createdAt: string;
 }
 
@@ -72,7 +72,7 @@ export interface ScheduleEvent {
   endTime: string | null;
   location: string | null;
   notes: string | null;
-  createdBy: number | null;
+  createdBy: string | null;
   createdAt: string;
 }
 

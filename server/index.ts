@@ -2,7 +2,6 @@ import "dotenv/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import cookieParser from "cookie-parser";
 import { initDatabase } from "./db";
 import { startPurgeJob } from "./jobs/purgeExpiredTrash";
 
@@ -24,7 +23,6 @@ startPurgeJob();
 
 const app = express();
 app.use(express.json({ limit: "30mb" }));
-app.use(cookieParser());
 
 app.use("/api/auth", authRouter);
 app.use("/api/lighting", lightingRouter);

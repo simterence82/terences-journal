@@ -6,8 +6,9 @@ schedule — built for a Singapore-based operations professional and their
 personal assistant to collaborate on daily work.
 
 This is a **standalone** build: plain Node.js/Express + React/Vite, with a
-single-file SQLite database. It has no dependency on any third-party
-platform — clone it, `npm install`, and run it anywhere Node.js runs.
+single-file SQLite database for business data and Firebase Authentication
+for login/credentials. No dependency on any third-party hosting platform —
+clone it, `npm install`, and run it anywhere Node.js runs.
 
 ## Features
 
@@ -41,30 +42,57 @@ platform — clone it, `npm install`, and run it anywhere Node.js runs.
 |---|---|
 | Frontend | React 18 + Vite, TypeScript, Tailwind CSS |
 | Backend | Express 5 (Node.js) |
-| Database | SQLite (better-sqlite3 + Drizzle ORM) |
+| Business data | SQLite via Node's built-in `node:sqlite` (no native build tools needed) |
+| Login / credentials | Firebase Authentication (Email/Password) |
 | File uploads | Multer, stored as base64 in SQLite |
-| Auth | JWT in an httpOnly cookie, bcrypt password hashing |
 | Data fetching | TanStack React Query |
 | Validation | Zod |
 
+## Where your data lives
+
+- **Login credentials** (email + password) live entirely in Firebase
+  Authentication — this app never stores or sees a password. Firebase issues
+  short-lived ID tokens; the backend verifies them on every request via the
+  Firebase Admin SDK. Roles (`admin`/`member`) are stored as a Firebase
+  custom claim, set by the backend (only the Admin SDK can set claims).
+- **Everything else** (lighting/Blum purchases, tasks, issues, schedule
+  entries, file attachments) lives in the local SQLite file at the path set
+  by `DATABASE_PATH` in `.env` (defaults to `./data/journal.db`). Each
+  record's `created_by` column stores the Firebase UID of whoever created it
+  — there's no local users table.
+
 ## Getting started
+
+### 1. Set up Firebase (one-time, ~5 minutes)
+
+1. Go to the [Firebase Console](https://console.firebase.google.com) → **Add
+   project** → name it → Create.
+2. **Build → Authentication → Get started → Sign-in method** tab → enable
+   **Email/Password**.
+3. **Project settings** (gear icon) → **General** tab → "Your apps" → click
+   the `</>` (web) icon → register an app → copy the `firebaseConfig` object
+   shown.
+4. **Project settings → Service accounts** tab → **Generate new private
+   key** → save the downloaded file as `server/firebase-service-account.json`
+   (already gitignored — never commit this file, it grants full admin access
+   to your Firebase project).
+
+### 2. Run the app
 
 ```bash
 npm install
 cp .env.example .env
-# edit .env and set a real JWT_SECRET (see the comment in the file)
+# paste the firebaseConfig values from step 1.3 into the VITE_FIREBASE_* vars
 npm run dev
 ```
 
 This starts the Express API on `http://localhost:3001` and the Vite dev
 server on `http://localhost:5173` (which proxies `/api` to the Express
 server). Open `http://localhost:5173` and you'll land on a first-run setup
-screen to create the initial admin account — no users exist yet in a fresh
-database.
+screen to create the initial admin account — no Firebase users exist yet.
 
-The SQLite database file is created automatically on first run at the path
-set by `DATABASE_PATH` in `.env` (defaults to `./data/journal.db`). No
-migration step is required — the schema is bootstrapped on server startup.
+The SQLite database file is created automatically on first run. No migration
+step is required — the schema is bootstrapped on server startup.
 
 ## Production build
 
@@ -74,7 +102,10 @@ npm start       # runs the Express server, which also serves dist/ in production
 ```
 
 Set `NODE_ENV=production` (the `npm start` script already does this) so the
-server serves the built frontend alongside the API on a single port.
+server serves the built frontend alongside the API on a single port. The
+`server/firebase-service-account.json` file needs to be present wherever you
+deploy — it's not committed to git, so copy it there separately (and keep it
+out of any public storage).
 
 ## Roles
 
@@ -93,4 +124,4 @@ server serves the built frontend alongside the API on a single port.
   larger scale, migrate to disk storage or an object store (S3/R2) and store
   a reference instead.
 - Back up the SQLite file (`data/journal.db`) regularly — it's the entire
-  application state.
+  business-data state (login credentials are safe in Firebase regardless).

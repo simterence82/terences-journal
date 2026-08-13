@@ -17,17 +17,13 @@ db.exec("PRAGMA foreign_keys = ON;");
 // just `npm install && npm run dev` for a single-file SQLite database, no
 // separate migration step and no native build tooling required (node:sqlite
 // is built into Node.js itself).
+//
+// NOTE: user accounts and login credentials live entirely in Firebase
+// Authentication (see server/firebase.ts) -- there is no local `users`
+// table. `created_by` columns below store the Firebase UID (a string) of
+// whoever created the record, with no local foreign key.
 export function initDatabase() {
   db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      display_name TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'member',
-      created_at INTEGER NOT NULL
-    );
-
     CREATE TABLE IF NOT EXISTS lighting_purchases (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       brand TEXT NOT NULL,
@@ -41,7 +37,7 @@ export function initDatabase() {
       paid_to_seller INTEGER NOT NULL DEFAULT 0,
       reimbursed INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by TEXT,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER
     );
@@ -54,7 +50,7 @@ export function initDatabase() {
       paid_to_seller INTEGER NOT NULL DEFAULT 0,
       reimbursed INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by TEXT,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER
     );
@@ -70,7 +66,7 @@ export function initDatabase() {
       file_name TEXT,
       file_data TEXT,
       file_type TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by TEXT,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER
     );
@@ -83,7 +79,7 @@ export function initDatabase() {
       file_data TEXT,
       file_type TEXT,
       resolved INTEGER NOT NULL DEFAULT 0,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by TEXT,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER
     );
@@ -96,7 +92,7 @@ export function initDatabase() {
       end_time TEXT,
       location TEXT,
       notes TEXT,
-      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_by TEXT,
       created_at INTEGER NOT NULL,
       deleted_at INTEGER
     );

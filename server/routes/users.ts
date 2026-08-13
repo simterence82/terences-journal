@@ -1,36 +1,27 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db";
-import { toIso, nowMs } from "../db/helpers";
+import { firebaseAuth } from "../firebase";
 import { requireAuth, requireAdmin } from "../auth/middleware";
-import { hashPassword } from "../auth/utils";
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
 
-interface UserRow {
-  id: number;
-  email: string;
-  display_name: string;
-  role: "admin" | "member";
-  created_at: number;
-}
-
-function toApi(row: UserRow) {
-  return {
-    id: row.id,
-    email: row.email,
-    displayName: row.display_name,
-    role: row.role,
-    createdAt: toIso(row.created_at),
-  };
-}
-
-router.get("/", (_req, res) => {
-  const rows = db
-    .prepare("SELECT id, email, display_name, role, created_at FROM users ORDER BY created_at ASC")
-    .all() as unknown as UserRow[];
-  res.json(rows.map(toApi));
+router.get("/", async (_req, res) => {
+  try {
+    const result = await firebaseAuth.listUsers(1000);
+    const users = result.users
+      .map((u) => ({
+        id: u.uid,
+        email: u.email ?? "",
+        displayName: u.displayName ?? u.email ?? "",
+        role: u.customClaims?.role === "admin" ? ("admin" as const) : ("member" as const),
+        createdAt: u.metadata.creationTime,
+      }))
+      .sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list users" });
+  }
 });
 
 const createSchema = z.object({
@@ -43,42 +34,41 @@ const createSchema = z.object({
 router.post("/", async (req, res) => {
   try {
     const input = createSchema.parse(req.body);
-    const email = input.email.toLowerCase();
 
-    const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
-    if (existing) {
-      res.status(409).json({ error: "Email already in use" });
-      return;
-    }
+    const userRecord = await firebaseAuth.createUser({
+      email: input.email.toLowerCase(),
+      password: input.password,
+      displayName: input.displayName,
+    });
 
-    const passwordHash = await hashPassword(input.password);
-    const createdAt = nowMs();
-    const result = db
-      .prepare("INSERT INTO users (email, password_hash, display_name, role, created_at) VALUES (?, ?, ?, ?, ?)")
-      .run(email, passwordHash, input.displayName, input.role, createdAt);
+    await firebaseAuth.setCustomUserClaims(userRecord.uid, { role: input.role });
 
-    res.json(
-      toApi({
-        id: Number(result.lastInsertRowid),
-        email,
-        display_name: input.displayName,
-        role: input.role,
-        created_at: createdAt,
-      })
-    );
+    res.json({
+      id: userRecord.uid,
+      email: userRecord.email,
+      displayName: userRecord.displayName,
+      role: input.role,
+      createdAt: userRecord.metadata.creationTime,
+    });
   } catch (error) {
-    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create user" });
+    const message = error instanceof Error ? error.message : "Failed to create user";
+    const status = message.includes("already exists") ? 409 : 400;
+    res.status(status).json({ error: message });
   }
 });
 
-router.delete("/:id", (req, res) => {
-  const id = Number(req.params.id);
-  if (id === req.user!.id) {
+router.delete("/:id", async (req, res) => {
+  const uid = req.params.id;
+  if (uid === req.user!.id) {
     res.status(400).json({ error: "You cannot delete your own account" });
     return;
   }
-  db.prepare("DELETE FROM users WHERE id = ?").run(id);
-  res.json({ success: true });
+  try {
+    await firebaseAuth.deleteUser(uid);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete user" });
+  }
 });
 
 export default router;

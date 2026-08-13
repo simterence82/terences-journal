@@ -1,57 +1,58 @@
-import React, { createContext, useCallback, useContext } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost } from "./apiClient";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { onAuthStateChanged, signOut as firebaseSignOut, type User as FirebaseUser } from "firebase/auth";
+import { auth } from "./firebase";
 import type { User } from "./types";
 
-export const AUTH_QUERY_KEY = ["auth", "session"] as const;
-
-type AuthState =
-  | { type: "loading" }
-  | { type: "authenticated"; user: User }
-  | { type: "unauthenticated" };
+type AuthState = { type: "loading" } | { type: "authenticated"; user: User } | { type: "unauthenticated" };
 
 interface AuthContextType {
   authState: AuthState;
-  onLogin: (user: User) => void;
   logout: () => Promise<void>;
+  /** Call after first-run registration or a role change to re-read custom claims. */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+async function toAppUser(firebaseUser: FirebaseUser): Promise<User> {
+  const tokenResult = await firebaseUser.getIdTokenResult();
+  const role = tokenResult.claims.role === "admin" ? "admin" : "member";
+  return {
+    id: firebaseUser.uid,
+    email: firebaseUser.email ?? "",
+    displayName: firebaseUser.displayName || firebaseUser.email || "",
+    role,
+  };
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const queryClient = useQueryClient();
+  const [authState, setAuthState] = useState<AuthState>({ type: "loading" });
 
-  const { data, status } = useQuery({
-    queryKey: AUTH_QUERY_KEY,
-    queryFn: async () => {
-      try {
-        const result = await apiGet<{ user: User }>("/auth/session");
-        return result.user;
-      } catch {
-        return null;
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setAuthState({ type: "unauthenticated" });
+        return;
       }
-    },
-    retry: false,
-    staleTime: Infinity,
-  });
-
-  const authState: AuthState =
-    status === "pending" ? { type: "loading" } : data ? { type: "authenticated", user: data } : { type: "unauthenticated" };
-
-  const onLogin = useCallback(
-    (user: User) => {
-      queryClient.setQueryData(AUTH_QUERY_KEY, user);
-    },
-    [queryClient]
-  );
+      const user = await toAppUser(firebaseUser);
+      setAuthState({ type: "authenticated", user });
+    });
+    return unsubscribe;
+  }, []);
 
   const logout = useCallback(async () => {
-    queryClient.setQueryData(AUTH_QUERY_KEY, null);
-    await apiPost("/auth/logout");
-    queryClient.resetQueries();
-  }, [queryClient]);
+    await firebaseSignOut(auth);
+  }, []);
 
-  return <AuthContext.Provider value={{ authState, onLogin, logout }}>{children}</AuthContext.Provider>;
+  const refreshUser = useCallback(async () => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return;
+    await firebaseUser.getIdToken(true);
+    const user = await toAppUser(firebaseUser);
+    setAuthState({ type: "authenticated", user });
+  }, []);
+
+  return <AuthContext.Provider value={{ authState, logout, refreshUser }}>{children}</AuthContext.Provider>;
 };
 
 export function useAuth(): AuthContextType {

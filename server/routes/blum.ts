@@ -15,7 +15,7 @@ interface BlumRow {
   paid_to_seller: number;
   reimbursed: number;
   notes: string | null;
-  created_by: number | null;
+  created_by: string | null;
   created_at: number;
 }
 

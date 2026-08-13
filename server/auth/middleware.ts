@@ -1,44 +1,29 @@
 import type { Request, Response, NextFunction } from "express";
-import { db } from "../db";
-import { SESSION_COOKIE_NAME, verifySession } from "./utils";
+import { firebaseAuth } from "../firebase";
 import "../types";
 
-interface UserRow {
-  id: number;
-  email: string;
-  display_name: string;
-  role: "admin" | "member";
-}
-
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const token = req.cookies?.[SESSION_COOKIE_NAME];
-  if (!token) {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
-  const payload = verifySession(token);
-  if (!payload) {
+  const token = header.slice("Bearer ".length);
+
+  try {
+    const decoded = await firebaseAuth.verifyIdToken(token);
+    const role = decoded.role === "admin" ? "admin" : "member";
+    req.user = {
+      id: decoded.uid,
+      email: decoded.email ?? "",
+      displayName: (decoded.name as string | undefined) ?? decoded.email ?? "",
+      role,
+    };
+    next();
+  } catch {
     res.status(401).json({ error: "Not authenticated" });
-    return;
   }
-
-  const row = db
-    .prepare("SELECT id, email, display_name, role FROM users WHERE id = ?")
-    .get(payload.userId) as UserRow | undefined;
-
-  if (!row) {
-    res.status(401).json({ error: "Not authenticated" });
-    return;
-  }
-
-  req.user = {
-    id: row.id,
-    email: row.email,
-    displayName: row.display_name,
-    role: row.role,
-  };
-  next();
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {

@@ -19,7 +19,7 @@ interface TaskRow {
   file_name: string | null;
   file_data: string | null;
   file_type: string | null;
-  created_by: number | null;
+  created_by: string | null;
   created_at: number;
 }
 

@@ -2,14 +2,15 @@ import React, { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { BookOpen } from "lucide-react";
+import { signInWithEmailAndPassword, signInWithCustomToken } from "firebase/auth";
+import { auth } from "../lib/firebase";
 import { apiGet, apiPost } from "../lib/apiClient";
 import { useAuth } from "../lib/AuthContext";
-import type { User } from "../lib/types";
 import { Input } from "../components/Input";
 import { Button } from "../components/Button";
 
 export const LoginPage: React.FC = () => {
-  const { authState, onLogin } = useAuth();
+  const { authState, refreshUser } = useAuth();
   const navigate = useNavigate();
 
   const { data: setupStatus, isFetching } = useQuery({
@@ -34,10 +35,16 @@ export const LoginPage: React.FC = () => {
     setError(null);
     setIsLoading(true);
     try {
-      const path = isFirstRun ? "/auth/register" : "/auth/login";
-      const body = isFirstRun ? { displayName, email, password } : { email, password };
-      const result = await apiPost<{ user: User }>(path, body);
-      onLogin(result.user);
+      if (isFirstRun) {
+        // Creating the first admin requires the Admin SDK (to set the
+        // "admin" custom claim), so this one step goes through our backend,
+        // which mints a custom token we exchange for a real session here.
+        const result = await apiPost<{ customToken: string }>("/auth/register", { displayName, email, password });
+        await signInWithCustomToken(auth, result.customToken);
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+      }
+      await refreshUser();
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
