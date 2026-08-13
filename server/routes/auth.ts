@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
 import { db } from "../db";
-import { users } from "../db/schema";
+import { toIso, nowMs } from "../db/helpers";
 import {
   comparePassword,
   hashPassword,
@@ -13,6 +12,25 @@ import {
 import { requireAuth } from "../auth/middleware";
 
 const router = Router();
+
+interface UserRow {
+  id: number;
+  email: string;
+  password_hash: string;
+  display_name: string;
+  role: "admin" | "member";
+  created_at: number;
+}
+
+function toPublicUser(row: UserRow) {
+  return {
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    role: row.role,
+    createdAt: toIso(row.created_at),
+  };
+}
 
 function setSessionCookie(res: import("express").Response, userId: number) {
   const token = signSession({ userId });
@@ -25,18 +43,9 @@ function setSessionCookie(res: import("express").Response, userId: number) {
   });
 }
 
-function toPublicUser(user: typeof users.$inferSelect) {
-  return {
-    id: user.id,
-    email: user.email,
-    displayName: user.displayName,
-    role: user.role,
-  };
-}
-
-router.get("/setup-status", async (_req, res) => {
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(users);
-  res.json({ hasUsers: Number(count) > 0 });
+router.get("/setup-status", (_req, res) => {
+  const { count } = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+  res.json({ hasUsers: count > 0 });
 });
 
 const registerSchema = z.object({
@@ -47,8 +56,8 @@ const registerSchema = z.object({
 
 router.post("/register", async (req, res) => {
   try {
-    const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(users);
-    if (Number(count) > 0) {
+    const { count } = db.prepare("SELECT COUNT(*) as count FROM users").get() as { count: number };
+    if (count > 0) {
       res.status(403).json({ error: "Setup already complete. Ask an admin to create your account." });
       return;
     }
@@ -56,17 +65,26 @@ router.post("/register", async (req, res) => {
     const input = registerSchema.parse(req.body);
     const email = input.email.toLowerCase();
 
-    const existing = await db.query.users.findFirst({ where: eq(users.email, email) });
+    const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
     if (existing) {
       res.status(409).json({ error: "Email already in use" });
       return;
     }
 
     const passwordHash = await hashPassword(input.password);
-    const [user] = await db
-      .insert(users)
-      .values({ email, passwordHash, displayName: input.displayName, role: "admin" })
-      .returning();
+    const createdAt = nowMs();
+    const result = db
+      .prepare("INSERT INTO users (email, password_hash, display_name, role, created_at) VALUES (?, ?, ?, 'admin', ?)")
+      .run(email, passwordHash, input.displayName, createdAt);
+
+    const user: UserRow = {
+      id: Number(result.lastInsertRowid),
+      email,
+      password_hash: passwordHash,
+      display_name: input.displayName,
+      role: "admin",
+      created_at: createdAt,
+    };
 
     setSessionCookie(res, user.id);
     res.json({ user: toPublicUser(user) });
@@ -85,13 +103,13 @@ router.post("/login", async (req, res) => {
     const input = loginSchema.parse(req.body);
     const email = input.email.toLowerCase();
 
-    const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as UserRow | undefined;
     if (!user) {
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
 
-    const valid = await comparePassword(input.password, user.passwordHash);
+    const valid = await comparePassword(input.password, user.password_hash);
     if (!valid) {
       res.status(401).json({ error: "Invalid email or password" });
       return;

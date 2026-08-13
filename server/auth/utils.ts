@@ -1,10 +1,11 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
+const envSecret = process.env.JWT_SECRET;
+if (!envSecret) {
   throw new Error("JWT_SECRET environment variable is not set. Copy .env.example to .env and fill it in.");
 }
+const JWT_SECRET: string = envSecret;
 
 export const SESSION_COOKIE_NAME = "journal_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 1 week
@@ -27,7 +28,11 @@ export function signSession(payload: SessionPayload): string {
 
 export function verifySession(token: string): SessionPayload | null {
   try {
-    return jwt.verify(token, JWT_SECRET) as SessionPayload;
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (typeof decoded === "object" && decoded !== null && typeof (decoded as { userId?: unknown }).userId === "number") {
+      return { userId: (decoded as { userId: number }).userId };
+    }
+    return null;
   } catch {
     return null;
   }

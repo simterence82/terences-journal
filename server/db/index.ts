@@ -1,9 +1,7 @@
 import "dotenv/config";
 import fs from "node:fs";
 import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema";
+import { DatabaseSync } from "node:sqlite";
 
 const dbPath = process.env.DATABASE_PATH || "./data/journal.db";
 const dbDir = path.dirname(dbPath);
@@ -11,17 +9,16 @@ if (!fs.existsSync(dbDir)) {
   fs.mkdirSync(dbDir, { recursive: true });
 }
 
-const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+export const db = new DatabaseSync(dbPath);
+db.exec("PRAGMA journal_mode = WAL;");
+db.exec("PRAGMA foreign_keys = ON;");
 
-export const db = drizzle(sqlite, { schema });
-
-// Bootstraps the schema directly with SQL DDL rather than requiring a
-// separate drizzle-kit migration step -- keeps first-run setup to just
-// `npm install && npm run dev` for a single-file SQLite database.
+// Bootstraps the schema directly with SQL DDL -- keeps first-run setup to
+// just `npm install && npm run dev` for a single-file SQLite database, no
+// separate migration step and no native build tooling required (node:sqlite
+// is built into Node.js itself).
 export function initDatabase() {
-  sqlite.exec(`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT NOT NULL UNIQUE,

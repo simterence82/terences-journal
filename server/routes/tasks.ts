@@ -1,33 +1,51 @@
 import { Router } from "express";
 import { z } from "zod";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../db";
-import { tasks } from "../db/schema";
+import { toBool, toIso, nowMs } from "../db/helpers";
 import { requireAuth, requireAdmin } from "../auth/middleware";
 import { upload, encodeAttachment } from "../upload";
 
 const router = Router();
 router.use(requireAuth);
 
-router.get("/", async (_req, res) => {
-  const rows = await db
-    .select({
-      id: tasks.id,
-      title: tasks.title,
-      description: tasks.description,
-      dueDate: tasks.dueDate,
-      priority: tasks.priority,
-      done: tasks.done,
-      assignedTo: tasks.assignedTo,
-      fileName: tasks.fileName,
-      fileType: tasks.fileType,
-      createdBy: tasks.createdBy,
-      createdAt: tasks.createdAt,
-    })
-    .from(tasks)
-    .where(isNull(tasks.deletedAt))
-    .orderBy(asc(tasks.done), asc(tasks.dueDate), desc(tasks.createdAt));
-  res.json(rows);
+interface TaskRow {
+  id: number;
+  title: string;
+  description: string | null;
+  due_date: string | null;
+  priority: "low" | "medium" | "high";
+  done: number;
+  assigned_to: string | null;
+  file_name: string | null;
+  file_data: string | null;
+  file_type: string | null;
+  created_by: number | null;
+  created_at: number;
+}
+
+function toApi(row: Omit<TaskRow, "file_data">) {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    dueDate: row.due_date,
+    priority: row.priority,
+    done: toBool(row.done),
+    assignedTo: row.assigned_to,
+    fileName: row.file_name,
+    fileType: row.file_type,
+    createdBy: row.created_by,
+    createdAt: toIso(row.created_at),
+  };
+}
+
+const LIST_COLUMNS = "id, title, description, due_date, priority, done, assigned_to, file_name, file_type, created_by, created_at";
+
+router.get("/", (_req, res) => {
+  const rows = db
+    .prepare(`SELECT ${LIST_COLUMNS} FROM tasks WHERE deleted_at IS NULL ORDER BY done ASC, due_date ASC, created_at DESC`)
+    .all() as Omit<TaskRow, "file_data">[];
+  res.json(rows.map(toApi));
 });
 
 const fieldsSchema = z.object({
@@ -38,7 +56,7 @@ const fieldsSchema = z.object({
   assignedTo: z.string().optional().nullable(),
 });
 
-router.post("/", upload.single("file"), async (req, res) => {
+router.post("/", upload.single("file"), (req, res) => {
   try {
     const input = fieldsSchema.parse({
       title: req.body.title,
@@ -49,20 +67,30 @@ router.post("/", upload.single("file"), async (req, res) => {
     });
 
     const attachment = req.file ? encodeAttachment(req.file) : null;
+    const createdAt = nowMs();
 
-    const [row] = await db
-      .insert(tasks)
-      .values({
-        ...input,
-        fileName: attachment?.fileName ?? null,
-        fileData: attachment?.fileData ?? null,
-        fileType: attachment?.fileType ?? null,
-        createdBy: req.user!.id,
-      })
-      .returning();
+    const result = db
+      .prepare(
+        `INSERT INTO tasks (title, description, due_date, priority, assigned_to, file_name, file_data, file_type, created_by, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        input.title,
+        input.description ?? null,
+        input.dueDate ?? null,
+        input.priority,
+        input.assignedTo ?? null,
+        attachment?.fileName ?? null,
+        attachment?.fileData ?? null,
+        attachment?.fileType ?? null,
+        req.user!.id,
+        createdAt
+      );
 
-    const { fileData, ...rest } = row;
-    res.json(rest);
+    const row = db
+      .prepare(`SELECT ${LIST_COLUMNS} FROM tasks WHERE id = ?`)
+      .get(Number(result.lastInsertRowid)) as Omit<TaskRow, "file_data">;
+    res.json(toApi(row));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create task" });
   }
@@ -77,42 +105,67 @@ const updateSchema = z.object({
   done: z.boolean().optional(),
 });
 
-router.patch("/:id", async (req, res) => {
+const COLUMN_BY_FIELD: Record<string, string> = {
+  title: "title",
+  description: "description",
+  dueDate: "due_date",
+  priority: "priority",
+  assignedTo: "assigned_to",
+  done: "done",
+};
+
+router.patch("/:id", (req, res) => {
   try {
     const id = Number(req.params.id);
     const updates = updateSchema.parse(req.body);
-    const [row] = await db
-      .update(tasks)
-      .set(updates)
-      .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)))
-      .returning();
+
+    const setClauses: string[] = [];
+    const values: (string | number | null)[] = [];
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === undefined) continue;
+      setClauses.push(`${COLUMN_BY_FIELD[field]} = ?`);
+      values.push(typeof value === "boolean" ? (value ? 1 : 0) : value);
+    }
+
+    if (setClauses.length === 0) {
+      res.status(400).json({ error: "No fields to update" });
+      return;
+    }
+
+    values.push(id);
+    db.prepare(`UPDATE tasks SET ${setClauses.join(", ")} WHERE id = ? AND deleted_at IS NULL`).run(...values);
+
+    const row = db.prepare(`SELECT ${LIST_COLUMNS} FROM tasks WHERE id = ?`).get(id) as Omit<TaskRow, "file_data"> | undefined;
     if (!row) {
       res.status(404).json({ error: "Task not found" });
       return;
     }
-    const { fileData, ...rest } = row;
-    res.json(rest);
+    res.json(toApi(row));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update task" });
   }
 });
 
-router.delete("/:id", requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, (req, res) => {
   const id = Number(req.params.id);
-  await db.update(tasks).set({ deletedAt: new Date() }).where(eq(tasks.id, id));
+  db.prepare("UPDATE tasks SET deleted_at = ? WHERE id = ?").run(nowMs(), id);
   res.json({ success: true });
 });
 
-router.get("/:id/file", async (req, res) => {
+router.get("/:id/file", (req, res) => {
   const id = Number(req.params.id);
-  const row = await db.query.tasks.findFirst({ where: eq(tasks.id, id) });
-  if (!row || !row.fileData || !row.fileName) {
+  const row = db.prepare("SELECT file_name, file_data, file_type FROM tasks WHERE id = ?").get(id) as
+    | { file_name: string | null; file_data: string | null; file_type: string | null }
+    | undefined;
+
+  if (!row || !row.file_data || !row.file_name) {
     res.status(404).json({ error: "No file attached" });
     return;
   }
-  const buffer = Buffer.from(row.fileData, "base64");
-  res.setHeader("Content-Type", row.fileType || "application/octet-stream");
-  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(row.fileName)}"`);
+
+  const buffer = Buffer.from(row.file_data, "base64");
+  res.setHeader("Content-Type", row.file_type || "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(row.file_name)}"`);
   res.send(buffer);
 });
 

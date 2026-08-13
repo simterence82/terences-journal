@@ -1,37 +1,25 @@
 import { Router } from "express";
-import { isNull } from "drizzle-orm";
 import { db } from "../db";
-import { lightingPurchases, blumPurchases, tasks } from "../db/schema";
 import { requireAuth } from "../auth/middleware";
 
 const router = Router();
 router.use(requireAuth);
 
-function distinctNonEmpty(values: (string | null)[]): string[] {
-  const set = new Set<string>();
-  for (const v of values) {
-    if (v && v.trim().length > 0) set.add(v);
-  }
-  return Array.from(set).sort((a, b) => a.localeCompare(b));
+function distinctColumn(table: string, column: string): string[] {
+  const rows = db
+    .prepare(`SELECT DISTINCT ${column} as value FROM ${table} WHERE deleted_at IS NULL AND ${column} IS NOT NULL AND TRIM(${column}) != ''`)
+    .all() as { value: string }[];
+  return rows.map((r) => r.value).sort((a, b) => a.localeCompare(b));
 }
 
-router.get("/", async (_req, res) => {
-  const [lighting, blum, taskRows] = await Promise.all([
-    db
-      .select({ brand: lightingPurchases.brand, clientName: lightingPurchases.clientName, address: lightingPurchases.address, commissionRecipient: lightingPurchases.commissionRecipient })
-      .from(lightingPurchases)
-      .where(isNull(lightingPurchases.deletedAt)),
-    db.select({ orderName: blumPurchases.orderName }).from(blumPurchases).where(isNull(blumPurchases.deletedAt)),
-    db.select({ assignedTo: tasks.assignedTo }).from(tasks).where(isNull(tasks.deletedAt)),
-  ]);
-
+router.get("/", (_req, res) => {
   res.json({
-    brands: distinctNonEmpty(lighting.map((r) => r.brand)),
-    clientNames: distinctNonEmpty(lighting.map((r) => r.clientName)),
-    addresses: distinctNonEmpty(lighting.map((r) => r.address)),
-    commissionRecipients: distinctNonEmpty(lighting.map((r) => r.commissionRecipient)),
-    blumOrderNames: distinctNonEmpty(blum.map((r) => r.orderName)),
-    taskAssignees: distinctNonEmpty(taskRows.map((r) => r.assignedTo)),
+    brands: distinctColumn("lighting_purchases", "brand"),
+    clientNames: distinctColumn("lighting_purchases", "client_name"),
+    addresses: distinctColumn("lighting_purchases", "address"),
+    commissionRecipients: distinctColumn("lighting_purchases", "commission_recipient"),
+    blumOrderNames: distinctColumn("blum_purchases", "order_name"),
+    taskAssignees: distinctColumn("tasks", "assigned_to"),
   });
 });
 

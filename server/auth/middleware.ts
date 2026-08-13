@@ -1,9 +1,14 @@
 import type { Request, Response, NextFunction } from "express";
-import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { users } from "../db/schema";
 import { SESSION_COOKIE_NAME, verifySession } from "./utils";
 import "../types";
+
+interface UserRow {
+  id: number;
+  email: string;
+  display_name: string;
+  role: "admin" | "member";
+}
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.[SESSION_COOKIE_NAME];
@@ -18,17 +23,20 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
 
-  const user = await db.query.users.findFirst({ where: eq(users.id, payload.userId) });
-  if (!user) {
+  const row = db
+    .prepare("SELECT id, email, display_name, role FROM users WHERE id = ?")
+    .get(payload.userId) as UserRow | undefined;
+
+  if (!row) {
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
 
   req.user = {
-    id: user.id,
-    email: user.email,
-    displayName: user.displayName,
-    role: user.role,
+    id: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    role: row.role,
   };
   next();
 }
