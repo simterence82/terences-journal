@@ -29,6 +29,7 @@ export const LoginPage: React.FC = () => {
   }
 
   const isFirstRun = setupStatus?.hasUsers === false;
+  const displayError = error ?? (authState.type === "unauthenticated" ? authState.errorMessage : undefined);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,7 +74,9 @@ export const LoginPage: React.FC = () => {
                 : "Sign in to continue to your journal."}
             </p>
 
-            {error && <div className="mb-4 rounded border border-error bg-[var(--error-tint)] px-3 py-2 text-sm text-error">{error}</div>}
+            {displayError && (
+              <div className="mb-4 rounded border border-error bg-[var(--error-tint)] px-3 py-2 text-sm text-error">{displayError}</div>
+            )}
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               {isFirstRun && (

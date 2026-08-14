@@ -3,7 +3,10 @@ import { onAuthStateChanged, signOut as firebaseSignOut, type User as FirebaseUs
 import { auth } from "./firebase";
 import type { User } from "./types";
 
-type AuthState = { type: "loading" } | { type: "authenticated"; user: User } | { type: "unauthenticated" };
+type AuthState =
+  | { type: "loading" }
+  | { type: "authenticated"; user: User }
+  | { type: "unauthenticated"; errorMessage?: string };
 
 interface AuthContextType {
   authState: AuthState;
@@ -14,9 +17,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-async function toAppUser(firebaseUser: FirebaseUser): Promise<User> {
+/**
+ * Returns the app user if `firebaseUser` has a role granted by an admin, or
+ * null if it's a Firebase account with no admin-set role -- e.g. someone
+ * self-signed-up directly against the Firebase Auth SDK, bypassing this
+ * app's backend entirely (the web apiKey is not secret, so that's always
+ * possible at the Firebase layer; only the role custom claim, set solely by
+ * our Admin-SDK-backed endpoints, marks an account as actually approved).
+ */
+async function toAppUser(firebaseUser: FirebaseUser): Promise<User | null> {
   const tokenResult = await firebaseUser.getIdTokenResult();
-  const role = tokenResult.claims.role === "admin" ? "admin" : "member";
+  const role = tokenResult.claims.role;
+  if (role !== "admin" && role !== "member") return null;
   return {
     id: firebaseUser.uid,
     email: firebaseUser.email ?? "",
@@ -35,6 +47,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       const user = await toAppUser(firebaseUser);
+      if (!user) {
+        await firebaseSignOut(auth);
+        setAuthState({ type: "unauthenticated", errorMessage: "This account has not been approved by an admin yet." });
+        return;
+      }
       setAuthState({ type: "authenticated", user });
     });
     return unsubscribe;
@@ -49,6 +66,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!firebaseUser) return;
     await firebaseUser.getIdToken(true);
     const user = await toAppUser(firebaseUser);
+    if (!user) {
+      await firebaseSignOut(auth);
+      setAuthState({ type: "unauthenticated", errorMessage: "This account has not been approved by an admin yet." });
+      return;
+    }
     setAuthState({ type: "authenticated", user });
   }, []);
 
