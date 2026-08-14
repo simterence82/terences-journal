@@ -9,7 +9,7 @@ export interface User {
 }
 
 export interface LightingPurchase {
-  id: number;
+  id: string;
   brand: string;
   clientName: string;
   address: string;
@@ -26,7 +26,7 @@ export interface LightingPurchase {
 }
 
 export interface BlumPurchase {
-  id: number;
+  id: string;
   orderName: string;
   amount: number;
   date: string;
@@ -40,7 +40,7 @@ export interface BlumPurchase {
 export type TaskPriority = "low" | "medium" | "high";
 
 export interface Task {
-  id: number;
+  id: string;
   title: string;
   description: string | null;
   dueDate: string | null;
@@ -54,7 +54,7 @@ export interface Task {
 }
 
 export interface Issue {
-  id: number;
+  id: string;
   title: string;
   description: string | null;
   resolved: boolean;
@@ -65,7 +65,7 @@ export interface Issue {
 }
 
 export interface ScheduleEvent {
-  id: number;
+  id: string;
   title: string;
   date: string;
   startTime: string | null;
@@ -80,7 +80,7 @@ export type TrashKind = "lighting" | "blum" | "tasks" | "issues" | "schedule";
 
 export interface TrashItem {
   kind: TrashKind;
-  id: number;
+  id: string;
   title: string;
   subtitle: string;
   hasFile: boolean;
@@ -90,7 +90,7 @@ export interface TrashItem {
 
 export interface FileArchiveItem {
   kind: "tasks" | "issues";
-  id: number;
+  id: string;
   sourceTitle: string;
   fileName: string;
   fileType: string | null;

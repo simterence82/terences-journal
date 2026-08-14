@@ -1,53 +1,54 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db";
-import { toBool, toIso, nowMs } from "../db/helpers";
+import { FieldValue, type Timestamp } from "firebase-admin/firestore";
+import { firestoreDb } from "../firebase";
+import { toIso } from "../firestoreUtil";
 import { requireAuth, requireAdmin } from "../auth/middleware";
 
 const router = Router();
 router.use(requireAuth);
 
-interface LightingRow {
-  id: number;
+const collection = firestoreDb.collection("lightingPurchases");
+
+interface LightingDoc {
   brand: string;
-  client_name: string;
+  clientName: string;
   address: string;
   date: string;
-  commission_given: number;
-  commission_recipient: string | null;
+  commissionGiven: number;
+  commissionRecipient: string | null;
   cost: number;
   selling: number;
-  paid_to_seller: number;
-  reimbursed: number;
+  paidToSeller: boolean;
+  reimbursed: boolean;
   notes: string | null;
-  created_by: string | null;
-  created_at: number;
+  createdBy: string | null;
+  createdAt: Timestamp;
+  isDeleted: boolean;
 }
 
-function toApi(row: LightingRow) {
+function toApi(id: string, data: LightingDoc) {
   return {
-    id: row.id,
-    brand: row.brand,
-    clientName: row.client_name,
-    address: row.address,
-    date: row.date,
-    commissionGiven: row.commission_given,
-    commissionRecipient: row.commission_recipient,
-    cost: row.cost,
-    selling: row.selling,
-    paidToSeller: toBool(row.paid_to_seller),
-    reimbursed: toBool(row.reimbursed),
-    notes: row.notes,
-    createdBy: row.created_by,
-    createdAt: toIso(row.created_at),
+    id,
+    brand: data.brand,
+    clientName: data.clientName,
+    address: data.address,
+    date: data.date,
+    commissionGiven: data.commissionGiven,
+    commissionRecipient: data.commissionRecipient,
+    cost: data.cost,
+    selling: data.selling,
+    paidToSeller: data.paidToSeller,
+    reimbursed: data.reimbursed,
+    notes: data.notes,
+    createdBy: data.createdBy,
+    createdAt: toIso(data.createdAt),
   };
 }
 
-router.get("/", (_req, res) => {
-  const rows = db
-    .prepare("SELECT * FROM lighting_purchases WHERE deleted_at IS NULL ORDER BY created_at DESC")
-    .all() as unknown as LightingRow[];
-  res.json(rows.map(toApi));
+router.get("/", async (_req, res) => {
+  const snap = await collection.where("isDeleted", "==", false).orderBy("createdAt", "desc").get();
+  res.json(snap.docs.map((doc) => toApi(doc.id, doc.data() as LightingDoc)));
 });
 
 const createSchema = z.object({
@@ -62,32 +63,27 @@ const createSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const input = createSchema.parse(req.body);
-    const createdAt = nowMs();
-    const result = db
-      .prepare(
-        `INSERT INTO lighting_purchases
-          (brand, client_name, address, date, commission_given, commission_recipient, cost, selling, notes, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        input.brand,
-        input.clientName,
-        input.address,
-        input.date,
-        input.commissionGiven,
-        input.commissionRecipient ?? null,
-        input.cost,
-        input.selling,
-        input.notes ?? null,
-        req.user!.id,
-        createdAt
-      );
-
-    const row = db.prepare("SELECT * FROM lighting_purchases WHERE id = ?").get(Number(result.lastInsertRowid)) as unknown as LightingRow;
-    res.json(toApi(row));
+    const docRef = await collection.add({
+      brand: input.brand,
+      clientName: input.clientName,
+      address: input.address,
+      date: input.date,
+      commissionGiven: input.commissionGiven,
+      commissionRecipient: input.commissionRecipient ?? null,
+      cost: input.cost,
+      selling: input.selling,
+      paidToSeller: false,
+      reimbursed: false,
+      notes: input.notes ?? null,
+      createdBy: req.user!.id,
+      createdAt: FieldValue.serverTimestamp(),
+      isDeleted: false,
+    });
+    const snap = await docRef.get();
+    res.json(toApi(snap.id, snap.data() as LightingDoc));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create entry" });
   }
@@ -107,56 +103,41 @@ const updateSchema = z.object({
   reimbursed: z.boolean().optional(),
 });
 
-const COLUMN_BY_FIELD: Record<string, string> = {
-  brand: "brand",
-  clientName: "client_name",
-  address: "address",
-  date: "date",
-  commissionGiven: "commission_given",
-  commissionRecipient: "commission_recipient",
-  cost: "cost",
-  selling: "selling",
-  notes: "notes",
-  paidToSeller: "paid_to_seller",
-  reimbursed: "reimbursed",
-};
-
-router.patch("/:id", (req, res) => {
+router.patch("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
     const updates = updateSchema.parse(req.body);
-
-    const setClauses: string[] = [];
-    const values: (string | number | null)[] = [];
-    for (const [field, value] of Object.entries(updates)) {
-      if (value === undefined) continue;
-      const column = COLUMN_BY_FIELD[field];
-      setClauses.push(`${column} = ?`);
-      values.push(typeof value === "boolean" ? (value ? 1 : 0) : value);
+    const docRef = collection.doc(req.params.id);
+    const existing = await docRef.get();
+    if (!existing.exists || (existing.data() as LightingDoc).isDeleted) {
+      res.status(404).json({ error: "Entry not found" });
+      return;
     }
 
-    if (setClauses.length === 0) {
+    const fields: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === undefined) continue;
+      fields[field] = value;
+    }
+
+    if (Object.keys(fields).length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
     }
 
-    values.push(id);
-    db.prepare(`UPDATE lighting_purchases SET ${setClauses.join(", ")} WHERE id = ? AND deleted_at IS NULL`).run(...values);
-
-    const row = db.prepare("SELECT * FROM lighting_purchases WHERE id = ?").get(id) as unknown as LightingRow | undefined;
-    if (!row) {
-      res.status(404).json({ error: "Entry not found" });
-      return;
-    }
-    res.json(toApi(row));
+    await docRef.update(fields);
+    const snap = await docRef.get();
+    res.json(toApi(snap.id, snap.data() as LightingDoc));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update entry" });
   }
 });
 
-router.delete("/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  db.prepare("UPDATE lighting_purchases SET deleted_at = ? WHERE id = ?").run(nowMs(), id);
+router.delete("/:id", requireAdmin, async (req, res) => {
+  const docRef = collection.doc(req.params.id);
+  const snap = await docRef.get();
+  if (snap.exists) {
+    await docRef.update({ isDeleted: true, deletedAt: FieldValue.serverTimestamp() });
+  }
   res.json({ success: true });
 });
 

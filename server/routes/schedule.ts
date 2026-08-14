@@ -1,43 +1,48 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db";
-import { toIso, nowMs } from "../db/helpers";
+import { FieldValue, type Timestamp } from "firebase-admin/firestore";
+import { firestoreDb } from "../firebase";
+import { toIso } from "../firestoreUtil";
 import { requireAuth, requireAdmin } from "../auth/middleware";
 
 const router = Router();
 router.use(requireAuth);
 
-interface ScheduleRow {
-  id: number;
+const collection = firestoreDb.collection("scheduleEvents");
+
+interface ScheduleDoc {
   title: string;
   date: string;
-  start_time: string | null;
-  end_time: string | null;
+  startTime: string | null;
+  endTime: string | null;
   location: string | null;
   notes: string | null;
-  created_by: string | null;
-  created_at: number;
+  createdBy: string | null;
+  createdAt: Timestamp;
+  isDeleted: boolean;
 }
 
-function toApi(row: ScheduleRow) {
+function toApi(id: string, data: ScheduleDoc) {
   return {
-    id: row.id,
-    title: row.title,
-    date: row.date,
-    startTime: row.start_time,
-    endTime: row.end_time,
-    location: row.location,
-    notes: row.notes,
-    createdBy: row.created_by,
-    createdAt: toIso(row.created_at),
+    id,
+    title: data.title,
+    date: data.date,
+    startTime: data.startTime,
+    endTime: data.endTime,
+    location: data.location,
+    notes: data.notes,
+    createdBy: data.createdBy,
+    createdAt: toIso(data.createdAt),
   };
 }
 
-router.get("/", (_req, res) => {
-  const rows = db
-    .prepare("SELECT * FROM schedule_events WHERE deleted_at IS NULL ORDER BY date ASC, start_time ASC")
-    .all() as unknown as ScheduleRow[];
-  res.json(rows.map(toApi));
+router.get("/", async (_req, res) => {
+  const snap = await collection
+    .where("isDeleted", "==", false)
+    .orderBy("date", "asc")
+    .orderBy("startTime", "asc")
+    .get();
+  res.json(snap.docs.map((doc) => toApi(doc.id, doc.data() as ScheduleDoc)));
 });
 
 const createSchema = z.object({
@@ -49,28 +54,22 @@ const createSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const input = createSchema.parse(req.body);
-    const createdAt = nowMs();
-    const result = db
-      .prepare(
-        `INSERT INTO schedule_events (title, date, start_time, end_time, location, notes, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        input.title,
-        input.date,
-        input.startTime ?? null,
-        input.endTime ?? null,
-        input.location ?? null,
-        input.notes ?? null,
-        req.user!.id,
-        createdAt
-      );
-
-    const row = db.prepare("SELECT * FROM schedule_events WHERE id = ?").get(Number(result.lastInsertRowid)) as unknown as ScheduleRow;
-    res.json(toApi(row));
+    const docRef = await collection.add({
+      title: input.title,
+      date: input.date,
+      startTime: input.startTime ?? null,
+      endTime: input.endTime ?? null,
+      location: input.location ?? null,
+      notes: input.notes ?? null,
+      createdBy: req.user!.id,
+      createdAt: FieldValue.serverTimestamp(),
+      isDeleted: false,
+    });
+    const snap = await docRef.get();
+    res.json(toApi(snap.id, snap.data() as ScheduleDoc));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create schedule entry" });
   }
@@ -85,50 +84,41 @@ const updateSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
-const COLUMN_BY_FIELD: Record<string, string> = {
-  title: "title",
-  date: "date",
-  startTime: "start_time",
-  endTime: "end_time",
-  location: "location",
-  notes: "notes",
-};
-
-router.patch("/:id", (req, res) => {
+router.patch("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
     const updates = updateSchema.parse(req.body);
-
-    const setClauses: string[] = [];
-    const values: (string | number | null)[] = [];
-    for (const [field, value] of Object.entries(updates)) {
-      if (value === undefined) continue;
-      setClauses.push(`${COLUMN_BY_FIELD[field]} = ?`);
-      values.push(value ?? null);
+    const docRef = collection.doc(req.params.id);
+    const existing = await docRef.get();
+    if (!existing.exists || (existing.data() as ScheduleDoc).isDeleted) {
+      res.status(404).json({ error: "Schedule entry not found" });
+      return;
     }
 
-    if (setClauses.length === 0) {
+    const fields: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === undefined) continue;
+      fields[field] = value;
+    }
+
+    if (Object.keys(fields).length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
     }
 
-    values.push(id);
-    db.prepare(`UPDATE schedule_events SET ${setClauses.join(", ")} WHERE id = ? AND deleted_at IS NULL`).run(...values);
-
-    const row = db.prepare("SELECT * FROM schedule_events WHERE id = ?").get(id) as unknown as ScheduleRow | undefined;
-    if (!row) {
-      res.status(404).json({ error: "Schedule entry not found" });
-      return;
-    }
-    res.json(toApi(row));
+    await docRef.update(fields);
+    const snap = await docRef.get();
+    res.json(toApi(snap.id, snap.data() as ScheduleDoc));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update schedule entry" });
   }
 });
 
-router.delete("/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  db.prepare("UPDATE schedule_events SET deleted_at = ? WHERE id = ?").run(nowMs(), id);
+router.delete("/:id", requireAdmin, async (req, res) => {
+  const docRef = collection.doc(req.params.id);
+  const snap = await docRef.get();
+  if (snap.exists) {
+    await docRef.update({ isDeleted: true, deletedAt: FieldValue.serverTimestamp() });
+  }
   res.json({ success: true });
 });
 

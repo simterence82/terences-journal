@@ -26,7 +26,7 @@ export const IssuesPage: React.FC = () => {
   const createMutation = useCreateIssue();
   const updateMutation = useUpdateIssue();
   const deleteMutation = useDeleteIssue();
-  const deleteTarget = useConfirmDialog<number>();
+  const deleteTarget = useConfirmDialog<string>();
 
   const [statusTab, setStatusTab] = useState<"unresolved" | "resolved">("unresolved");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -64,7 +64,7 @@ export const IssuesPage: React.FC = () => {
     );
   };
 
-  const toggleResolved = (id: number, resolved: boolean) => {
+  const toggleResolved = (id: string, resolved: boolean) => {
     updateMutation.mutate({ id, resolved: !resolved }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update issue") });
   };
 

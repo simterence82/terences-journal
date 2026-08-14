@@ -2,7 +2,6 @@ import "dotenv/config";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
-import { initDatabase } from "./db";
 import { startPurgeJob } from "./jobs/purgeExpiredTrash";
 
 import authRouter from "./routes/auth";
@@ -18,7 +17,6 @@ import lookupsRouter from "./routes/lookups";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-initDatabase();
 startPurgeJob();
 
 const app = express();

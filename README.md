@@ -5,10 +5,11 @@ hardware orders, outstanding tasks, outstanding issues, and a shared
 schedule — built for a Singapore-based operations professional and their
 personal assistant to collaborate on daily work.
 
-This is a **standalone** build: plain Node.js/Express + React/Vite, with a
-single-file SQLite database for business data and Firebase Authentication
-for login/credentials. No dependency on any third-party hosting platform —
-clone it, `npm install`, and run it anywhere Node.js runs.
+This is a **standalone** build: plain Node.js/Express + React/Vite, with all
+data — login/credentials, business records, and file attachments — stored
+in Firebase (Authentication, Cloud Firestore, and Cloud Storage). No local
+database file to manage or back up — clone it, `npm install`, point it at
+your Firebase project, and run it anywhere Node.js runs.
 
 ## Features
 
@@ -42,47 +43,77 @@ clone it, `npm install`, and run it anywhere Node.js runs.
 |---|---|
 | Frontend | React 18 + Vite, TypeScript, Tailwind CSS |
 | Backend | Express 5 (Node.js) |
-| Business data | SQLite via Node's built-in `node:sqlite` (no native build tools needed) |
+| Business data | Cloud Firestore |
 | Login / credentials | Firebase Authentication (Email/Password) |
-| File uploads | Multer, stored as base64 in SQLite |
+| File uploads | Multer (in-memory) uploaded to Cloud Storage for Firebase |
 | Data fetching | TanStack React Query |
 | Validation | Zod |
 
 ## Where your data lives
+
+Everything lives in your Firebase project — there is no local database file.
 
 - **Login credentials** (email + password) live entirely in Firebase
   Authentication — this app never stores or sees a password. Firebase issues
   short-lived ID tokens; the backend verifies them on every request via the
   Firebase Admin SDK. Roles (`admin`/`member`) are stored as a Firebase
   custom claim, set by the backend (only the Admin SDK can set claims).
-- **Everything else** (lighting/Blum purchases, tasks, issues, schedule
-  entries, file attachments) lives in the local SQLite file at the path set
-  by `DATABASE_PATH` in `.env` (defaults to `./data/journal.db`). Each
-  record's `created_by` column stores the Firebase UID of whoever created it
-  — there's no local users table.
+- **Records** (lighting/Blum purchases, tasks, issues, schedule entries)
+  live in Cloud Firestore, one collection per record type. Each document's
+  `createdBy` field stores the Firebase UID of whoever created it — there's
+  no local users table. Deleting a record sets `isDeleted: true` (the Trash
+  Bin) rather than removing the document; a background job permanently
+  purges anything soft-deleted for more than 120 days.
+- **File attachments** (task files, issue PDFs/images) live in Cloud
+  Storage for Firebase, under `attachments/{collection}/{docId}/{fileName}`.
+  The Firestore document only stores a `storagePath` reference — the file
+  bytes never round-trip through Firestore.
+- The frontend never talks to Firestore or Storage directly — every request
+  goes through the Express API, which uses the Firebase Admin SDK (bypasses
+  security rules). `firestore.rules` and `storage.rules` in this repo deny
+  all direct client access as a safety net.
 
 ## Getting started
 
-### 1. Set up Firebase (one-time, ~5 minutes)
+### 1. Set up Firebase (one-time, ~10 minutes)
 
 1. Go to the [Firebase Console](https://console.firebase.google.com) → **Add
    project** → name it → Create.
 2. **Build → Authentication → Get started → Sign-in method** tab → enable
    **Email/Password**.
-3. **Project settings** (gear icon) → **General** tab → "Your apps" → click
+3. **Build → Firestore Database → Create database** → start in **Native
+   mode**, pick a location close to you → Create. (This app talks to
+   Firestore only through the Admin SDK, so the default security rules
+   Firebase suggests don't matter — the rules this repo ships in
+   `firestore.rules` lock it down properly once you deploy them in step 4.)
+4. **Build → Storage → Get started** → keep the default bucket → Create.
+5. **Project settings** (gear icon) → **General** tab → "Your apps" → click
    the `</>` (web) icon → register an app → copy the `firebaseConfig` object
-   shown.
-4. **Project settings → Service accounts** tab → **Generate new private
+   shown (you'll need the `storageBucket` value from it too).
+6. **Project settings → Service accounts** tab → **Generate new private
    key** → save the downloaded file as `server/firebase-service-account.json`
    (already gitignored — never commit this file, it grants full admin access
    to your Firebase project).
 
-### 2. Run the app
+### 2. Deploy Firestore/Storage rules and indexes (one-time)
+
+This repo includes `firestore.rules`, `storage.rules`, and
+`firestore.indexes.json` — deploy them with the [Firebase
+CLI](https://firebase.google.com/docs/cli):
+
+```bash
+npm install -g firebase-tools
+firebase login
+firebase use --add   # pick the project you created above, alias it "default"
+firebase deploy --only firestore:rules,firestore:indexes,storage
+```
+
+### 3. Run the app
 
 ```bash
 npm install
 cp .env.example .env
-# paste the firebaseConfig values from step 1.3 into the VITE_FIREBASE_* vars
+# paste the firebaseConfig values from step 1.5 into the VITE_FIREBASE_* vars
 npm run dev
 ```
 
@@ -91,8 +122,8 @@ server on `http://localhost:5173` (which proxies `/api` to the Express
 server). Open `http://localhost:5173` and you'll land on a first-run setup
 screen to create the initial admin account — no Firebase users exist yet.
 
-The SQLite database file is created automatically on first run. No migration
-step is required — the schema is bootstrapped on server startup.
+Firestore collections are created automatically on first write — no
+migration step is required.
 
 ## Production build
 
@@ -120,8 +151,10 @@ out of any public storage).
 - **Weather and news** on the Dashboard are sample data — swap
   `src/lib/sampleWeatherNews.ts` for a real API call (e.g. NEA Singapore for
   weather, an RSS/news API for headlines).
-- **File storage** is base64-in-SQLite for zero-dependency simplicity. For
-  larger scale, migrate to disk storage or an object store (S3/R2) and store
-  a reference instead.
-- Back up the SQLite file (`data/journal.db`) regularly — it's the entire
-  business-data state (login credentials are safe in Firebase regardless).
+- Autocomplete/lookup values (`GET /api/lookups`) are computed by reading
+  each relevant Firestore collection in full and deduping in memory — fine
+  at personal-operations scale, but worth revisiting (e.g. a maintained
+  lookups collection) if any collection grows very large.
+- Firebase's own backup tooling (scheduled Firestore exports, Storage
+  versioning) covers this app's data — there's no local database file to
+  back up separately.

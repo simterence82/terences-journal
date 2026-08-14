@@ -13,7 +13,7 @@ export const useTrashList = () => useQuery({ queryKey: KEY, queryFn: () => apiGe
 export const useRestoreTrashItem = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ kind, id }: { kind: TrashKind; id: number }) => apiPost<{ success: true }>("/trash/restore", { kind, id }),
+    mutationFn: ({ kind, id }: { kind: TrashKind; id: string }) => apiPost<{ success: true }>("/trash/restore", { kind, id }),
     onSuccess: () => AFFECTED_KEYS.forEach((key) => qc.invalidateQueries({ queryKey: key })),
   });
 };
@@ -21,7 +21,7 @@ export const useRestoreTrashItem = () => {
 export const usePermanentDeleteTrashItem = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ kind, id }: { kind: TrashKind; id: number }) => apiPost<{ success: true }>("/trash/permanent-delete", { kind, id }),
+    mutationFn: ({ kind, id }: { kind: TrashKind; id: string }) => apiPost<{ success: true }>("/trash/permanent-delete", { kind, id }),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };

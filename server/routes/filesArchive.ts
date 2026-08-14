@@ -1,48 +1,53 @@
 import { Router } from "express";
-import { db } from "../db";
-import { toIso } from "../db/helpers";
+import type { Timestamp } from "firebase-admin/firestore";
+import { firestoreDb } from "../firebase";
+import { toIso } from "../firestoreUtil";
 import { requireAuth } from "../auth/middleware";
 
 const router = Router();
 router.use(requireAuth);
 
-router.get("/", (_req, res) => {
-  const taskFiles = db
-    .prepare(
-      "SELECT id, title, file_name, file_type, created_at FROM tasks WHERE deleted_at IS NULL AND file_name IS NOT NULL"
-    )
-    .all() as { id: number; title: string; file_name: string; file_type: string | null; created_at: number }[];
+interface FileDoc {
+  title: string;
+  fileName: string | null;
+  fileType: string | null;
+  createdAt: Timestamp;
+}
 
-  const issueFiles = db
-    .prepare(
-      "SELECT id, title, file_name, file_type, created_at FROM issues WHERE deleted_at IS NULL AND file_name IS NOT NULL"
-    )
-    .all() as { id: number; title: string; file_name: string; file_type: string | null; created_at: number }[];
+router.get("/", async (_req, res) => {
+  const [taskFiles, issueFiles] = await Promise.all([
+    firestoreDb.collection("tasks").where("isDeleted", "==", false).where("hasFile", "==", true).get(),
+    firestoreDb.collection("issues").where("isDeleted", "==", false).where("hasFile", "==", true).get(),
+  ]);
 
   const items = [
-    ...taskFiles.map((f) => ({
-      kind: "tasks" as const,
-      id: f.id,
-      sourceTitle: f.title,
-      fileName: f.file_name,
-      fileType: f.file_type,
-      createdAt: toIso(f.created_at),
-      downloadUrl: `/api/tasks/${f.id}/file`,
-      _sort: f.created_at,
-    })),
-    ...issueFiles.map((f) => ({
-      kind: "issues" as const,
-      id: f.id,
-      sourceTitle: f.title,
-      fileName: f.file_name,
-      fileType: f.file_type,
-      createdAt: toIso(f.created_at),
-      downloadUrl: `/api/issues/${f.id}/file`,
-      _sort: f.created_at,
-    })),
+    ...taskFiles.docs.map((doc) => {
+      const d = doc.data() as FileDoc;
+      return {
+        kind: "tasks" as const,
+        id: doc.id,
+        sourceTitle: d.title,
+        fileName: d.fileName as string,
+        fileType: d.fileType,
+        createdAt: d.createdAt,
+        downloadUrl: `/api/tasks/${doc.id}/file`,
+      };
+    }),
+    ...issueFiles.docs.map((doc) => {
+      const d = doc.data() as FileDoc;
+      return {
+        kind: "issues" as const,
+        id: doc.id,
+        sourceTitle: d.title,
+        fileName: d.fileName as string,
+        fileType: d.fileType,
+        createdAt: d.createdAt,
+        downloadUrl: `/api/issues/${doc.id}/file`,
+      };
+    }),
   ]
-    .sort((a, b) => b._sort - a._sort)
-    .map(({ _sort, ...rest }) => rest);
+    .sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis())
+    .map(({ createdAt, ...rest }) => ({ ...rest, createdAt: toIso(createdAt) }));
 
   res.json(items);
 });

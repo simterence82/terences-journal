@@ -27,7 +27,7 @@ export const useCreateIssue = () => {
 };
 
 export interface IssueUpdateInput {
-  id: number;
+  id: string;
   title?: string;
   description?: string | null;
   resolved?: boolean;
@@ -44,11 +44,11 @@ export const useUpdateIssue = () => {
 export const useDeleteIssue = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => apiDelete<{ success: true }>(`/issues/${id}`),
+    mutationFn: (id: string) => apiDelete<{ success: true }>(`/issues/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
 
-export function downloadIssueFile(id: number) {
+export function downloadIssueFile(id: string) {
   window.open(`/api/issues/${id}/file`, "_blank", "noopener,noreferrer");
 }

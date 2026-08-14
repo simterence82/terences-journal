@@ -1,51 +1,56 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db } from "../db";
-import { toBool, toIso, nowMs } from "../db/helpers";
+import { FieldValue, type Timestamp } from "firebase-admin/firestore";
+import { firestoreDb } from "../firebase";
+import { toIso } from "../firestoreUtil";
 import { requireAuth, requireAdmin } from "../auth/middleware";
-import { upload, encodeAttachment } from "../upload";
+import { upload, uploadAttachment, streamAttachment } from "../storage";
 
 const router = Router();
 router.use(requireAuth);
 
-interface TaskRow {
-  id: number;
+const collection = firestoreDb.collection("tasks");
+
+interface TaskDoc {
   title: string;
   description: string | null;
-  due_date: string | null;
+  dueDate: string | null;
   priority: "low" | "medium" | "high";
-  done: number;
-  assigned_to: string | null;
-  file_name: string | null;
-  file_data: string | null;
-  file_type: string | null;
-  created_by: string | null;
-  created_at: number;
+  done: boolean;
+  assignedTo: string | null;
+  fileName: string | null;
+  fileType: string | null;
+  storagePath: string | null;
+  hasFile: boolean;
+  createdBy: string | null;
+  createdAt: Timestamp;
+  isDeleted: boolean;
 }
 
-function toApi(row: Omit<TaskRow, "file_data">) {
+function toApi(id: string, data: TaskDoc) {
   return {
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    dueDate: row.due_date,
-    priority: row.priority,
-    done: toBool(row.done),
-    assignedTo: row.assigned_to,
-    fileName: row.file_name,
-    fileType: row.file_type,
-    createdBy: row.created_by,
-    createdAt: toIso(row.created_at),
+    id,
+    title: data.title,
+    description: data.description,
+    dueDate: data.dueDate,
+    priority: data.priority,
+    done: data.done,
+    assignedTo: data.assignedTo,
+    fileName: data.fileName,
+    fileType: data.fileType,
+    createdBy: data.createdBy,
+    createdAt: toIso(data.createdAt),
   };
 }
 
-const LIST_COLUMNS = "id, title, description, due_date, priority, done, assigned_to, file_name, file_type, created_by, created_at";
-
-router.get("/", (_req, res) => {
-  const rows = db
-    .prepare(`SELECT ${LIST_COLUMNS} FROM tasks WHERE deleted_at IS NULL ORDER BY done ASC, due_date ASC, created_at DESC`)
-    .all() as Omit<TaskRow, "file_data">[];
-  res.json(rows.map(toApi));
+router.get("/", async (_req, res) => {
+  const snap = await collection
+    .where("isDeleted", "==", false)
+    .orderBy("done", "asc")
+    .orderBy("dueDate", "asc")
+    .orderBy("createdAt", "desc")
+    .get();
+  res.json(snap.docs.map((doc) => toApi(doc.id, doc.data() as TaskDoc)));
 });
 
 const fieldsSchema = z.object({
@@ -56,7 +61,7 @@ const fieldsSchema = z.object({
   assignedTo: z.string().optional().nullable(),
 });
 
-router.post("/", upload.single("file"), (req, res) => {
+router.post("/", upload.single("file"), async (req, res) => {
   try {
     const input = fieldsSchema.parse({
       title: req.body.title,
@@ -66,31 +71,29 @@ router.post("/", upload.single("file"), (req, res) => {
       assignedTo: req.body.assignedTo || null,
     });
 
-    const attachment = req.file ? encodeAttachment(req.file) : null;
-    const createdAt = nowMs();
+    const docRef = await collection.add({
+      title: input.title,
+      description: input.description ?? null,
+      dueDate: input.dueDate ?? null,
+      priority: input.priority,
+      done: false,
+      assignedTo: input.assignedTo ?? null,
+      fileName: null,
+      fileType: null,
+      storagePath: null,
+      hasFile: false,
+      createdBy: req.user!.id,
+      createdAt: FieldValue.serverTimestamp(),
+      isDeleted: false,
+    });
 
-    const result = db
-      .prepare(
-        `INSERT INTO tasks (title, description, due_date, priority, assigned_to, file_name, file_data, file_type, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        input.title,
-        input.description ?? null,
-        input.dueDate ?? null,
-        input.priority,
-        input.assignedTo ?? null,
-        attachment?.fileName ?? null,
-        attachment?.fileData ?? null,
-        attachment?.fileType ?? null,
-        req.user!.id,
-        createdAt
-      );
+    if (req.file) {
+      const attachment = await uploadAttachment("tasks", docRef.id, req.file);
+      await docRef.update({ ...attachment, hasFile: true });
+    }
 
-    const row = db
-      .prepare(`SELECT ${LIST_COLUMNS} FROM tasks WHERE id = ?`)
-      .get(Number(result.lastInsertRowid)) as Omit<TaskRow, "file_data">;
-    res.json(toApi(row));
+    const snap = await docRef.get();
+    res.json(toApi(snap.id, snap.data() as TaskDoc));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to create task" });
   }
@@ -105,68 +108,54 @@ const updateSchema = z.object({
   done: z.boolean().optional(),
 });
 
-const COLUMN_BY_FIELD: Record<string, string> = {
-  title: "title",
-  description: "description",
-  dueDate: "due_date",
-  priority: "priority",
-  assignedTo: "assigned_to",
-  done: "done",
-};
-
-router.patch("/:id", (req, res) => {
+router.patch("/:id", async (req, res) => {
   try {
-    const id = Number(req.params.id);
     const updates = updateSchema.parse(req.body);
-
-    const setClauses: string[] = [];
-    const values: (string | number | null)[] = [];
-    for (const [field, value] of Object.entries(updates)) {
-      if (value === undefined) continue;
-      setClauses.push(`${COLUMN_BY_FIELD[field]} = ?`);
-      values.push(typeof value === "boolean" ? (value ? 1 : 0) : value);
+    const docRef = collection.doc(req.params.id);
+    const existing = await docRef.get();
+    if (!existing.exists || (existing.data() as TaskDoc).isDeleted) {
+      res.status(404).json({ error: "Task not found" });
+      return;
     }
 
-    if (setClauses.length === 0) {
+    const fields: Record<string, unknown> = {};
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === undefined) continue;
+      fields[field] = value;
+    }
+
+    if (Object.keys(fields).length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
     }
 
-    values.push(id);
-    db.prepare(`UPDATE tasks SET ${setClauses.join(", ")} WHERE id = ? AND deleted_at IS NULL`).run(...values);
-
-    const row = db.prepare(`SELECT ${LIST_COLUMNS} FROM tasks WHERE id = ?`).get(id) as Omit<TaskRow, "file_data"> | undefined;
-    if (!row) {
-      res.status(404).json({ error: "Task not found" });
-      return;
-    }
-    res.json(toApi(row));
+    await docRef.update(fields);
+    const snap = await docRef.get();
+    res.json(toApi(snap.id, snap.data() as TaskDoc));
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update task" });
   }
 });
 
-router.delete("/:id", requireAdmin, (req, res) => {
-  const id = Number(req.params.id);
-  db.prepare("UPDATE tasks SET deleted_at = ? WHERE id = ?").run(nowMs(), id);
+router.delete("/:id", requireAdmin, async (req, res) => {
+  const docRef = collection.doc(req.params.id);
+  const snap = await docRef.get();
+  if (snap.exists) {
+    await docRef.update({ isDeleted: true, deletedAt: FieldValue.serverTimestamp() });
+  }
   res.json({ success: true });
 });
 
-router.get("/:id/file", (req, res) => {
-  const id = Number(req.params.id);
-  const row = db.prepare("SELECT file_name, file_data, file_type FROM tasks WHERE id = ?").get(id) as
-    | { file_name: string | null; file_data: string | null; file_type: string | null }
-    | undefined;
+router.get("/:id/file", async (req, res) => {
+  const snap = await collection.doc(req.params.id).get();
+  const data = snap.data() as TaskDoc | undefined;
 
-  if (!row || !row.file_data || !row.file_name) {
+  if (!data || !data.storagePath || !data.fileName) {
     res.status(404).json({ error: "No file attached" });
     return;
   }
 
-  const buffer = Buffer.from(row.file_data, "base64");
-  res.setHeader("Content-Type", row.file_type || "application/octet-stream");
-  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(row.file_name)}"`);
-  res.send(buffer);
+  streamAttachment(data.storagePath, res, data.fileName, data.fileType);
 });
 
 export default router;

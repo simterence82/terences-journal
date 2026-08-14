@@ -24,7 +24,7 @@ export const useCreateBlum = () => {
 export const useUpdateBlum = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...updates }: { id: number } & Partial<BlumCreateInput> & { paidToSeller?: boolean; reimbursed?: boolean }) =>
+    mutationFn: ({ id, ...updates }: { id: string } & Partial<BlumCreateInput> & { paidToSeller?: boolean; reimbursed?: boolean }) =>
       apiPatch<BlumPurchase>(`/blum/${id}`, updates),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
@@ -33,7 +33,7 @@ export const useUpdateBlum = () => {
 export const useDeleteBlum = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => apiDelete<{ success: true }>(`/blum/${id}`),
+    mutationFn: (id: string) => apiDelete<{ success: true }>(`/blum/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };

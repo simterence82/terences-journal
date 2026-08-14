@@ -26,7 +26,7 @@ export const useCreateSchedule = () => {
 export const useUpdateSchedule = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...updates }: { id: number } & Partial<ScheduleCreateInput>) =>
+    mutationFn: ({ id, ...updates }: { id: string } & Partial<ScheduleCreateInput>) =>
       apiPatch<ScheduleEvent>(`/schedule/${id}`, updates),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
@@ -35,7 +35,7 @@ export const useUpdateSchedule = () => {
 export const useDeleteSchedule = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => apiDelete<{ success: true }>(`/schedule/${id}`),
+    mutationFn: (id: string) => apiDelete<{ success: true }>(`/schedule/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };

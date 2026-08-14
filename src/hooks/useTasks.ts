@@ -33,7 +33,7 @@ export const useCreateTask = () => {
 };
 
 export interface TaskUpdateInput {
-  id: number;
+  id: string;
   title?: string;
   description?: string | null;
   dueDate?: string | null;
@@ -53,11 +53,11 @@ export const useUpdateTask = () => {
 export const useDeleteTask = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => apiDelete<{ success: true }>(`/tasks/${id}`),
+    mutationFn: (id: string) => apiDelete<{ success: true }>(`/tasks/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
 
-export function downloadTaskFile(id: number) {
+export function downloadTaskFile(id: string) {
   window.open(`/api/tasks/${id}/file`, "_blank", "noopener,noreferrer");
 }

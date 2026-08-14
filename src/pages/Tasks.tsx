@@ -34,7 +34,7 @@ export const TasksPage: React.FC = () => {
   const createMutation = useCreateTask();
   const updateMutation = useUpdateTask();
   const deleteMutation = useDeleteTask();
-  const deleteTarget = useConfirmDialog<number>();
+  const deleteTarget = useConfirmDialog<string>();
 
   const [statusTab, setStatusTab] = useState<"open" | "done">("open");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -72,7 +72,7 @@ export const TasksPage: React.FC = () => {
     );
   };
 
-  const toggleDone = (id: number, done: boolean) => {
+  const toggleDone = (id: string, done: boolean) => {
     updateMutation.mutate({ id, done: !done }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update task") });
   };
 

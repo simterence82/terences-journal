@@ -30,7 +30,7 @@ export const useCreateLighting = () => {
 export const useUpdateLighting = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...updates }: { id: number } & Partial<LightingCreateInput> & { paidToSeller?: boolean; reimbursed?: boolean }) =>
+    mutationFn: ({ id, ...updates }: { id: string } & Partial<LightingCreateInput> & { paidToSeller?: boolean; reimbursed?: boolean }) =>
       apiPatch<LightingPurchase>(`/lighting/${id}`, updates),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
@@ -39,7 +39,7 @@ export const useUpdateLighting = () => {
 export const useDeleteLighting = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => apiDelete<{ success: true }>(`/lighting/${id}`),
+    mutationFn: (id: string) => apiDelete<{ success: true }>(`/lighting/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
