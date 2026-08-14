@@ -238,7 +238,7 @@ export const TasksPage: React.FC = () => {
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
                 {task.fileName ? (
-                  <button type="button" onClick={() => downloadTaskFile(task.id)} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                  <button type="button" onClick={() => void downloadTaskFile(task.id, task.fileName!, task.fileType)} className="flex items-center gap-1 text-xs text-primary hover:underline">
                     <Download size={14} /> {task.fileName}
                   </button>
                 ) : <span />}

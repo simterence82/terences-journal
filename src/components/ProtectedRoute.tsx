@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ roles, children }) => {
-  const { authState } = useAuth();
+  const { authState, logout } = useAuth();
 
   if (authState.type === "loading") {
     return (
@@ -22,6 +22,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ roles, children 
 
   if (authState.type === "unauthenticated") {
     return <Navigate to="/login" replace />;
+  }
+
+  if (authState.type === "pending") {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
+        <h1 className="font-display text-xl font-semibold text-foreground">Awaiting approval</h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          Your account has been created but an admin still needs to approve it before you can access this journal.
+        </p>
+        <button onClick={() => logout()} className="mt-2 text-[0.8125rem] text-primary hover:underline">
+          Sign out
+        </button>
+      </div>
+    );
   }
 
   if (!roles.includes(authState.user.role)) {

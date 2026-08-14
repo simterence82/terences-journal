@@ -1,11 +1,7 @@
-import type { Timestamp } from "firebase-admin/firestore";
+import type { Timestamp } from "firebase/firestore";
 
 export function toIso(value: Timestamp): string {
   return value.toDate().toISOString();
-}
-
-export function toIsoOrNull(value: Timestamp | null | undefined): string | null {
-  return value ? value.toDate().toISOString() : null;
 }
 
 // Mirrors SQLite's default ASC ordering, where NULL sorts before any value.

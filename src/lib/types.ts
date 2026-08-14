@@ -8,6 +8,13 @@ export interface User {
   createdAt?: string;
 }
 
+export interface PendingUser {
+  id: string;
+  email: string;
+  displayName: string;
+  requestedAt: string;
+}
+
 export interface LightingPurchase {
   id: string;
   brand: string;
@@ -95,7 +102,6 @@ export interface FileArchiveItem {
   fileName: string;
   fileType: string | null;
   createdAt: string;
-  downloadUrl: string;
 }
 
 export interface LookupsResponse {

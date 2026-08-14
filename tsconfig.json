@@ -17,10 +17,7 @@
     "allowJs": false,
     "noEmit": true,
     "types": ["node"],
-    "baseUrl": ".",
-    "paths": {
-      "@shared/*": ["shared/*"]
-    }
+    "baseUrl": "."
   },
-  "include": ["src", "server", "shared", "vite.config.ts"]
+  "include": ["src", "scripts", "vite.config.ts"]
 }

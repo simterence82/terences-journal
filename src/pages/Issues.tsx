@@ -191,7 +191,7 @@ export const IssuesPage: React.FC = () => {
               {issue.description && <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">{issue.description}</p>}
               <div className="flex items-center justify-between border-t border-border pt-2">
                 {issue.fileName ? (
-                  <button type="button" onClick={() => downloadIssueFile(issue.id)} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                  <button type="button" onClick={() => void downloadIssueFile(issue.id, issue.fileName!, issue.fileType)} className="flex items-center gap-1 text-xs text-primary hover:underline">
                     <Download size={14} /> {issue.fileName}
                   </button>
                 ) : <span />}

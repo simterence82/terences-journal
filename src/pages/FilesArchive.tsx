@@ -1,6 +1,8 @@
 import React from "react";
 import { Download, FolderArchive, FileText } from "lucide-react";
 import { useFilesArchiveList } from "../hooks/useFilesArchive";
+import { downloadTaskFile } from "../hooks/useTasks";
+import { downloadIssueFile } from "../hooks/useIssues";
 import { Badge } from "../components/Badge";
 import { Skeleton } from "../components/Skeleton";
 
@@ -51,14 +53,17 @@ export const FilesArchivePage: React.FC = () => {
                   <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{file.sourceTitle}</td>
                   <td className="border-b border-border px-4 py-3 text-foreground">{new Date(file.createdAt).toLocaleDateString("en-SG")}</td>
                   <td className="border-b border-border px-4 py-3">
-                    <a
-                      href={file.downloadUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() =>
+                        file.kind === "tasks"
+                          ? downloadTaskFile(file.id, file.fileName, file.fileType)
+                          : downloadIssueFile(file.id, file.fileName, file.fileType)
+                      }
                       className="flex items-center gap-1 text-primary hover:underline"
                     >
                       <Download size={16} />
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))}
