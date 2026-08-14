@@ -7,9 +7,9 @@ personal assistant to collaborate on daily work.
 
 This is a **standalone** build: plain Node.js/Express + React/Vite, with all
 data — login/credentials, business records, and file attachments — stored
-in Firebase (Authentication, Cloud Firestore, and Cloud Storage). No local
-database file to manage or back up — clone it, `npm install`, point it at
-your Firebase project, and run it anywhere Node.js runs.
+in Firebase (Authentication and Cloud Firestore). No local database file to
+manage or back up, and no billing plan required — clone it, `npm install`,
+point it at your Firebase project, and run it anywhere Node.js runs.
 
 ## Features
 
@@ -45,7 +45,7 @@ your Firebase project, and run it anywhere Node.js runs.
 | Backend | Express 5 (Node.js) |
 | Business data | Cloud Firestore |
 | Login / credentials | Firebase Authentication (Email/Password) |
-| File uploads | Multer (in-memory) uploaded to Cloud Storage for Firebase |
+| File uploads | Multer, stored as base64 in Firestore |
 | Data fetching | TanStack React Query |
 | Validation | Zod |
 
@@ -64,14 +64,17 @@ Everything lives in your Firebase project — there is no local database file.
   no local users table. Deleting a record sets `isDeleted: true` (the Trash
   Bin) rather than removing the document; a background job permanently
   purges anything soft-deleted for more than 120 days.
-- **File attachments** (task files, issue PDFs/images) live in Cloud
-  Storage for Firebase, under `attachments/{collection}/{docId}/{fileName}`.
-  The Firestore document only stores a `storagePath` reference — the file
-  bytes never round-trip through Firestore.
-- The frontend never talks to Firestore or Storage directly — every request
-  goes through the Express API, which uses the Firebase Admin SDK (bypasses
-  security rules). `firestore.rules` and `storage.rules` in this repo deny
-  all direct client access as a safety net.
+- **File attachments** (task files, issue PDFs/images) are stored as base64
+  text directly on the Firestore document (`fileData`), the same way the
+  original SQLite version worked. Firestore caps a document at 1MiB, so
+  attachments are limited to about 700KB before base64 encoding — fine for
+  most PDFs/scans, but a full-resolution phone photo could be too large.
+  (Cloud Storage would remove that cap, but requires upgrading the Firebase
+  project to a paid Blaze plan, which this setup deliberately avoids.)
+- The frontend never talks to Firestore directly — every request goes
+  through the Express API, which uses the Firebase Admin SDK (bypasses
+  security rules). `firestore.rules` in this repo denies all direct client
+  access as a safety net.
 
 ## Getting started
 
@@ -85,39 +88,42 @@ Everything lives in your Firebase project — there is no local database file.
    mode**, pick a location close to you → Create. (This app talks to
    Firestore only through the Admin SDK, so the default security rules
    Firebase suggests don't matter — the rules this repo ships in
-   `firestore.rules` lock it down properly once you deploy them in step 4.)
-4. **Build → Storage → Get started** → keep the default bucket → Create.
-5. **Project settings** (gear icon) → **General** tab → "Your apps" → click
+   `firestore.rules` lock it down properly once you deploy them in step 2.)
+4. **Project settings** (gear icon) → **General** tab → "Your apps" → click
    the `</>` (web) icon → register an app → copy the `firebaseConfig` object
-   shown (you'll need the `storageBucket` value from it too).
-6. **Project settings → Service accounts** tab → **Generate new private
+   shown.
+5. **Project settings → Service accounts** tab → **Generate new private
    key** → save the downloaded file as `server/firebase-service-account.json`
    (already gitignored — never commit this file, it grants full admin access
    to your Firebase project).
 
-### 2. Publish Firestore/Storage rules (one-time)
+This deliberately skips Cloud Storage — as of recent Firebase changes, it
+requires upgrading the project to a paid "Blaze" plan (a card on file, even
+though usage would very likely stay within the free tier). File attachments
+are stored directly in Firestore instead (see "Where your data lives"
+above), which needs no billing plan at all.
 
-This repo includes `firestore.rules` and `storage.rules`. Every query the
-app runs is a single-field filter (no composite indexes needed), so there's
-no index setup step — just publish the two rule files from the console:
+### 2. Publish Firestore rules (one-time)
 
-1. **Build → Firestore Database → Rules** tab → replace the contents with
-   `firestore.rules` from this repo → **Publish**.
-2. **Build → Storage → Rules** tab → replace the contents with
-   `storage.rules` from this repo → **Publish**.
+This repo includes `firestore.rules`. Every query the app runs is a
+single-field filter (no composite indexes needed), so there's no index
+setup step — just publish the rules file from the console:
+
+**Build → Firestore Database → Rules** tab → replace the contents with
+`firestore.rules` from this repo → **Publish**.
 
 (If you'd rather use the [Firebase CLI](https://firebase.google.com/docs/cli)
 instead: `firebase login && firebase use --add && firebase deploy --only
-firestore:rules,storage`. Note the CLI's deploy command needs to be run
-under your own Google login — a service account key alone isn't enough
-permission for it.)
+firestore:rules`. Note the CLI's deploy command needs to be run under your
+own Google login — a service account key alone isn't enough permission for
+it.)
 
 ### 3. Run the app
 
 ```bash
 npm install
 cp .env.example .env
-# paste the firebaseConfig values from step 1.5 into the VITE_FIREBASE_* vars
+# paste the firebaseConfig values from step 1.4 into the VITE_FIREBASE_* vars
 npm run dev
 ```
 
@@ -159,6 +165,8 @@ out of any public storage).
   each relevant Firestore collection in full and deduping in memory — fine
   at personal-operations scale, but worth revisiting (e.g. a maintained
   lookups collection) if any collection grows very large.
-- Firebase's own backup tooling (scheduled Firestore exports, Storage
-  versioning) covers this app's data — there's no local database file to
-  back up separately.
+- Firebase's own backup tooling (scheduled Firestore exports) covers this
+  app's data — there's no local database file to back up separately.
+- File attachments are capped around 700KB (see "Where your data lives"
+  above). If that becomes limiting, Cloud Storage removes the cap but
+  requires upgrading to Firebase's paid Blaze plan.

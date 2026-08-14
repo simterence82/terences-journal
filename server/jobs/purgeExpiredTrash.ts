@@ -1,6 +1,5 @@
 import type { Timestamp, WriteBatch } from "firebase-admin/firestore";
 import { firestoreDb } from "../firebase";
-import { deleteAttachment } from "../storage";
 
 const RETENTION_DAYS = 120;
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // once a day
@@ -19,13 +18,6 @@ async function purgeExpiredTrash() {
     });
 
     if (expired.length === 0) continue;
-
-    for (const doc of expired) {
-      const storagePath = doc.data().storagePath as string | null | undefined;
-      if (storagePath) {
-        await deleteAttachment(storagePath);
-      }
-    }
 
     const batches: WriteBatch[] = [];
     let batch = firestoreDb.batch();

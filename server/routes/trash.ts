@@ -4,7 +4,6 @@ import type { Timestamp } from "firebase-admin/firestore";
 import { firestoreDb } from "../firebase";
 import { toIso } from "../firestoreUtil";
 import { requireAuth, requireAdmin } from "../auth/middleware";
-import { deleteAttachment } from "../storage";
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -86,14 +85,7 @@ router.post("/permanent-delete", async (req, res) => {
   try {
     const { kind, id } = actionSchema.parse(req.body);
     const docRef = firestoreDb.collection(COLLECTION_BY_KIND[kind]).doc(id);
-    const snap = await docRef.get();
-    if (snap.exists) {
-      const data = snap.data() as { storagePath?: string | null };
-      if (data.storagePath) {
-        await deleteAttachment(data.storagePath);
-      }
-      await docRef.delete();
-    }
+    await docRef.delete();
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: error instanceof Error ? error.message : "Failed to permanently delete item" });

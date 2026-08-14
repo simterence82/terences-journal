@@ -4,7 +4,7 @@ import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { firestoreDb } from "../firebase";
 import { toIso } from "../firestoreUtil";
 import { requireAuth, requireAdmin } from "../auth/middleware";
-import { upload, uploadAttachment, streamAttachment } from "../storage";
+import { upload, encodeAttachment } from "../upload";
 
 const router = Router();
 router.use(requireAuth);
@@ -19,7 +19,7 @@ interface IssueDoc {
   resolved: boolean;
   fileName: string | null;
   fileType: string | null;
-  storagePath: string | null;
+  fileData: string | null;
   hasFile: boolean;
   createdBy: string | null;
   createdAt: Timestamp;
@@ -66,23 +66,20 @@ router.post("/", upload.single("file"), async (req, res) => {
       description: req.body.description || null,
     });
 
+    const attachment = req.file ? encodeAttachment(req.file) : null;
+
     const docRef = await collection.add({
       title: input.title,
       description: input.description ?? null,
       resolved: false,
-      fileName: null,
-      fileType: null,
-      storagePath: null,
-      hasFile: false,
+      fileName: attachment?.fileName ?? null,
+      fileType: attachment?.fileType ?? null,
+      fileData: attachment?.fileData ?? null,
+      hasFile: !!attachment,
       createdBy: req.user!.id,
       createdAt: FieldValue.serverTimestamp(),
       isDeleted: false,
     });
-
-    if (req.file) {
-      const attachment = await uploadAttachment("issues", docRef.id, req.file);
-      await docRef.update({ ...attachment, hasFile: true });
-    }
 
     const snap = await docRef.get();
     res.json(toApi(snap.id, snap.data() as IssueDoc));
@@ -139,12 +136,15 @@ router.get("/:id/file", async (req, res) => {
   const snap = await collection.doc(req.params.id).get();
   const data = snap.data() as IssueDoc | undefined;
 
-  if (!data || !data.storagePath || !data.fileName) {
+  if (!data || !data.fileData || !data.fileName) {
     res.status(404).json({ error: "No file attached" });
     return;
   }
 
-  streamAttachment(data.storagePath, res, data.fileName, data.fileType);
+  const buffer = Buffer.from(data.fileData, "base64");
+  res.setHeader("Content-Type", data.fileType || "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(data.fileName)}"`);
+  res.send(buffer);
 });
 
 export default router;
