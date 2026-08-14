@@ -15,10 +15,13 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
 
   const [isFirstRun, setIsFirstRun] = useState<boolean | null>(null);
+  const [setupCheckError, setSetupCheckError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>("login");
 
   useEffect(() => {
-    getDoc(doc(db, "meta", "setup")).then((snap) => setIsFirstRun(!snap.exists()));
+    getDoc(doc(db, "meta", "setup"))
+      .then((snap) => setIsFirstRun(!snap.exists()))
+      .catch((err) => setSetupCheckError(err instanceof Error ? err.message : "Could not reach the server"));
   }, []);
 
   const [displayName, setDisplayName] = useState("");
@@ -82,7 +85,14 @@ export const LoginPage: React.FC = () => {
           <h1 className="font-display text-2xl font-semibold text-foreground">Terence's Journal</h1>
         </div>
 
-        {isFirstRun === null ? (
+        {setupCheckError ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <p className="text-sm text-error">Couldn't reach Firebase: {setupCheckError}</p>
+            <Button type="button" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+          </div>
+        ) : isFirstRun === null ? (
           <div className="flex justify-center py-8">
             <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
           </div>
