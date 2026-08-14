@@ -1,0 +1,115 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f6f7fb;
+  --ink: #12141c;
+
+  --surface: #eceef5;
+  --surface-ink: #12141c;
+
+  --panel: #ffffff;
+  --panel-ink: #12141c;
+
+  --pop: #ffffff;
+  --pop-ink: #12141c;
+
+  --brand: #4338ca;
+  --brand-ink: #fbfaff;
+
+  --accent: #b45309;
+  --accent-ink: #fffaf0;
+
+  --faint: #eef0f6;
+  --faint-ink: #565b6e;
+
+  --ok: #15803d;
+  --ok-ink: #f0fdf4;
+
+  --bad: #b91c1c;
+  --bad-ink: #fef2f2;
+
+  --warn: #b45309;
+  --warn-ink: #fffbeb;
+
+  --line: #e1e4ef;
+  --ring: rgba(67, 56, 202, 0.28);
+
+  --brand-wash: #4338ca1f;
+  --accent-wash: #b453091f;
+  --ok-wash: #15803d1f;
+  --bad-wash: #b91c1c1f;
+  --warn-wash: #b453091f;
+
+  --font-display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  --font-base: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
+}
+
+.dark {
+  --bg: #0a0c14;
+  --ink: #e8e9f2;
+
+  --surface: #10131d;
+  --surface-ink: #e8e9f2;
+
+  --panel: #141826;
+  --panel-ink: #e8e9f2;
+
+  --pop: #161b2b;
+  --pop-ink: #e8e9f2;
+
+  --brand: #818cf8;
+  --brand-ink: #0d0f1a;
+
+  --accent: #f0a94e;
+  --accent-ink: #1c1103;
+
+  --faint: #191e2e;
+  --faint-ink: #9ba0b8;
+
+  --ok: #4ade80;
+  --ok-ink: #06210e;
+
+  --bad: #f87171;
+  --bad-ink: #240808;
+
+  --warn: #f0a94e;
+  --warn-ink: #1c1103;
+
+  --line: #232a3d;
+  --ring: rgba(129, 140, 248, 0.35);
+
+  --brand-wash: #818cf833;
+  --accent-wash: #f0a94e33;
+  --ok-wash: #4ade8033;
+  --bad-wash: #f8717133;
+  --warn-wash: #f0a94e33;
+}
+
+* {
+  border-color: var(--line);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-base);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--brand-wash);
+}
