@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { FieldValue, type Timestamp } from "firebase-admin/firestore";
 import { firestoreDb } from "../firebase";
-import { toIso } from "../firestoreUtil";
+import { toIso, compareNullableAsc } from "../firestoreUtil";
 import { requireAuth, requireAdmin } from "../auth/middleware";
 import { upload, uploadAttachment, streamAttachment } from "../storage";
 
@@ -44,13 +44,15 @@ function toApi(id: string, data: TaskDoc) {
 }
 
 router.get("/", async (_req, res) => {
-  const snap = await collection
-    .where("isDeleted", "==", false)
-    .orderBy("done", "asc")
-    .orderBy("dueDate", "asc")
-    .orderBy("createdAt", "desc")
-    .get();
-  res.json(snap.docs.map((doc) => toApi(doc.id, doc.data() as TaskDoc)));
+  const snap = await collection.where("isDeleted", "==", false).get();
+  const items = snap.docs.map((doc) => toApi(doc.id, doc.data() as TaskDoc));
+  items.sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    const dueCmp = compareNullableAsc(a.dueDate, b.dueDate);
+    if (dueCmp !== 0) return dueCmp;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  res.json(items);
 });
 
 const fieldsSchema = z.object({

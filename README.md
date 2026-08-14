@@ -95,18 +95,22 @@ Everything lives in your Firebase project — there is no local database file.
    (already gitignored — never commit this file, it grants full admin access
    to your Firebase project).
 
-### 2. Deploy Firestore/Storage rules and indexes (one-time)
+### 2. Publish Firestore/Storage rules (one-time)
 
-This repo includes `firestore.rules`, `storage.rules`, and
-`firestore.indexes.json` — deploy them with the [Firebase
-CLI](https://firebase.google.com/docs/cli):
+This repo includes `firestore.rules` and `storage.rules`. Every query the
+app runs is a single-field filter (no composite indexes needed), so there's
+no index setup step — just publish the two rule files from the console:
 
-```bash
-npm install -g firebase-tools
-firebase login
-firebase use --add   # pick the project you created above, alias it "default"
-firebase deploy --only firestore:rules,firestore:indexes,storage
-```
+1. **Build → Firestore Database → Rules** tab → replace the contents with
+   `firestore.rules` from this repo → **Publish**.
+2. **Build → Storage → Rules** tab → replace the contents with
+   `storage.rules` from this repo → **Publish**.
+
+(If you'd rather use the [Firebase CLI](https://firebase.google.com/docs/cli)
+instead: `firebase login && firebase use --add && firebase deploy --only
+firestore:rules,storage`. Note the CLI's deploy command needs to be run
+under your own Google login — a service account key alone isn't enough
+permission for it.)
 
 ### 3. Run the app
 

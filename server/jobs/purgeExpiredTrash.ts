@@ -1,4 +1,4 @@
-import { Timestamp, type WriteBatch } from "firebase-admin/firestore";
+import type { Timestamp, WriteBatch } from "firebase-admin/firestore";
 import { firestoreDb } from "../firebase";
 import { deleteAttachment } from "../storage";
 
@@ -8,18 +8,19 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // once a day
 const COLLECTIONS = ["lightingPurchases", "blumPurchases", "tasks", "issues", "scheduleEvents"];
 
 async function purgeExpiredTrash() {
-  const cutoff = Timestamp.fromMillis(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
+  const cutoffMs = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
   for (const collectionName of COLLECTIONS) {
-    const snap = await firestoreDb
-      .collection(collectionName)
-      .where("isDeleted", "==", true)
-      .where("deletedAt", "<", cutoff)
-      .get();
+    const snap = await firestoreDb.collection(collectionName).where("isDeleted", "==", true).get();
 
-    if (snap.empty) continue;
+    const expired = snap.docs.filter((doc) => {
+      const deletedAt = doc.data().deletedAt as Timestamp | undefined;
+      return deletedAt && deletedAt.toMillis() < cutoffMs;
+    });
 
-    for (const doc of snap.docs) {
+    if (expired.length === 0) continue;
+
+    for (const doc of expired) {
       const storagePath = doc.data().storagePath as string | null | undefined;
       if (storagePath) {
         await deleteAttachment(storagePath);
@@ -29,7 +30,7 @@ async function purgeExpiredTrash() {
     const batches: WriteBatch[] = [];
     let batch = firestoreDb.batch();
     let opsInBatch = 0;
-    for (const doc of snap.docs) {
+    for (const doc of expired) {
       batch.delete(doc.ref);
       opsInBatch++;
       if (opsInBatch === 500) {

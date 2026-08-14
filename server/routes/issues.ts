@@ -40,12 +40,13 @@ function toApi(id: string, data: IssueDoc) {
 }
 
 router.get("/", async (_req, res) => {
-  const snap = await collection
-    .where("isDeleted", "==", false)
-    .orderBy("resolved", "asc")
-    .orderBy("createdAt", "desc")
-    .get();
-  res.json(snap.docs.map((doc) => toApi(doc.id, doc.data() as IssueDoc)));
+  const snap = await collection.where("isDeleted", "==", false).get();
+  const items = snap.docs.map((doc) => toApi(doc.id, doc.data() as IssueDoc));
+  items.sort((a, b) => {
+    if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+  res.json(items);
 });
 
 const fieldsSchema = z.object({
