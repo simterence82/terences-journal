@@ -88,7 +88,7 @@ export const BlumPage: React.FC = () => {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <AutoCompleteField label="Order Name" required options={lookupsQuery.data?.blumOrderNames ?? []} value={form.orderName} onChange={setField("orderName")} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-foreground">Amount (S$)</label>
               <Input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setField("amount")(e.target.value)} placeholder="0.00" />

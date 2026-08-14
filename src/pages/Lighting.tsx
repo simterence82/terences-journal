@@ -112,7 +112,7 @@ export const LightingPage: React.FC = () => {
           <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={form.brand} onChange={setField("brand")} />
           <AutoCompleteField label="Client Name" required options={lookupsQuery.data?.clientNames ?? []} value={form.clientName} onChange={setField("clientName")} />
           <AutoCompleteField label="Address" required options={lookupsQuery.data?.addresses ?? []} value={form.address} onChange={setField("address")} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
               <Input type="date" value={form.date} onChange={(e) => setField("date")(e.target.value)} required />
@@ -123,7 +123,7 @@ export const LightingPage: React.FC = () => {
             </div>
           </div>
           <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={form.commissionRecipient} onChange={setField("commissionRecipient")} />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-foreground">Cost (S$)</label>
               <Input type="number" min="0" step="0.01" value={form.cost} onChange={(e) => setField("cost")(e.target.value)} placeholder="0.00" />

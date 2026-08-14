@@ -79,7 +79,7 @@ export const LoginPage: React.FC = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-8 shadow-lg">
+      <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg sm:p-8">
         <div className="mb-2 flex items-center gap-3 text-primary">
           <BookOpen size={28} />
           <h1 className="font-display text-2xl font-semibold text-foreground">Terence's Journal</h1>

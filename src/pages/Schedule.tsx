@@ -83,7 +83,7 @@ export const SchedulePage: React.FC = () => {
             <label className="text-[0.8125rem] font-medium text-foreground">Title *</label>
             <Input value={form.title} onChange={(e) => setField("title")(e.target.value)} required placeholder="e.g. Client meeting" />
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
               <Input type="date" value={form.date} onChange={(e) => setField("date")(e.target.value)} required />

@@ -151,7 +151,7 @@ export const TasksPage: React.FC = () => {
             <label className="text-[0.8125rem] font-medium text-foreground">Description</label>
             <Textarea value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} rows={3} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-foreground">Due Date</label>
               <Input type="date" value={form.dueDate} onChange={(e) => setForm((p) => ({ ...p, dueDate: e.target.value }))} />
@@ -194,7 +194,7 @@ export const TasksPage: React.FC = () => {
             <label className="text-[0.8125rem] font-medium text-foreground">Description</label>
             <Textarea value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} rows={3} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-foreground">Due Date</label>
               <Input type="date" value={editForm.dueDate} onChange={(e) => setEditForm((p) => ({ ...p, dueDate: e.target.value }))} />
