@@ -1,0 +1,104 @@
+rules_version = '2';
+
+// The only access-control layer in the app -- the frontend talks to
+// Firestore directly from the browser (no backend server), so every check
+// lives here. This is a separate Firebase project from Terence's Journal:
+// its own login, its own data, its own rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isApproved() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isApproved() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isOwnDesigner(assignedTo) {
+      return isApproved() && request.auth.uid == assignedTo;
+    }
+
+    // Sentinel doc: its existence means an admin has already been
+    // bootstrapped. Readable by anyone (even signed out) so the login page
+    // can decide whether to show the first-run setup form. Created exactly
+    // once, atomically alongside the first admin's users/{uid} doc.
+    match /meta/setup {
+      allow get: if true;
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.initializedBy &&
+        !exists(/databases/$(database)/documents/meta/setup);
+      allow update, delete: if false;
+    }
+
+    // Existence of a users/{uid} doc IS "approved"; its role field
+    // ("admin" or "designer") is the permission level.
+    match /users/{userId} {
+      allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      // Two ways to create: (1) the very first user bootstraps themselves as
+      // admin, only while meta/setup doesn't exist yet; (2) an existing
+      // admin approves a pending request (or edits an existing user's role).
+      allow create: if request.auth != null &&
+        ((request.auth.uid == userId &&
+          request.resource.data.role == "admin" &&
+          !exists(/databases/$(database)/documents/meta/setup)) ||
+         isAdmin());
+      allow update: if isAdmin();
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    // A user writes their own pending request at sign-up time; only admins
+    // can see the queue and approve (delete + create users/{uid}) or deny
+    // (delete only).
+    match /pendingUsers/{userId} {
+      allow get, list: if isAdmin();
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // Only admins assign/create/delete leads (they're the ones handing
+    // leads to designers). A designer can read and update their own
+    // assigned leads (status, quotation, follow-up date, notes) but can't
+    // reassign, edit client identity fields, or delete. Every read must be
+    // scoped by an equality query on assignedTo for a designer's "list" to
+    // be provable against this rule -- see useLeads.ts.
+    match /leads/{id} {
+      allow get: if isAdmin() || isOwnDesigner(resource.data.assignedTo);
+      allow list: if isAdmin() || isOwnDesigner(resource.data.assignedTo);
+      allow create: if isAdmin();
+      allow update: if isAdmin() ||
+        (isOwnDesigner(resource.data.assignedTo) &&
+         !request.resource.data.diff(resource.data).affectedKeys().hasAny(
+           ["assignedTo", "assignedToName", "clientName", "createdBy", "createdByName", "createdAt"]
+         ));
+      allow delete: if isAdmin();
+    }
+
+    // A follow-up belongs to exactly one lead; visibility mirrors that
+    // lead's assignedTo. Admins can read/create/update/delete any; the
+    // assigned designer can read and create (log a follow-up) but not
+    // edit/delete history after the fact.
+    match /leadFollowUps/{id} {
+      allow get: if isAdmin() ||
+        isOwnDesigner(get(/databases/$(database)/documents/leads/$(resource.data.leadId)).data.assignedTo);
+      allow list: if isAdmin() ||
+        isOwnDesigner(get(/databases/$(database)/documents/leads/$(resource.data.leadId)).data.assignedTo);
+      allow create: if isAdmin() ||
+        isOwnDesigner(get(/databases/$(database)/documents/leads/$(request.resource.data.leadId)).data.assignedTo);
+      allow update, delete: if isAdmin();
+    }
+
+    // Only admins mark attendance (see product decision: admin-marked, not
+    // self-check-in). Designers can read only their own history.
+    match /attendance/{id} {
+      allow get: if isAdmin() || isOwnDesigner(resource.data.designerId);
+      allow list: if isAdmin() || isOwnDesigner(resource.data.designerId);
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -32,6 +32,40 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+
+      # Studio Leads is a separate app (its own package.json, own Firebase
+      # project) published under the same GitHub Pages site at
+      # /design-leads/ -- see design-leads/vite.config.ts. It only builds
+      # (and only needs its own DESIGN_LEADS_VITE_FIREBASE_* variables set)
+      # once you've set up its Firebase project; until then this step is
+      # skipped so the main journal keeps deploying on its own.
+      - name: Check Studio Leads Firebase config
+        id: design-leads-config
+        run: |
+          if [ -n "${{ vars.DESIGN_LEADS_VITE_FIREBASE_API_KEY }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install Studio Leads dependencies
+        if: steps.design-leads-config.outputs.configured == 'true'
+        run: npm ci
+        working-directory: design-leads
+      - name: Build Studio Leads
+        if: steps.design-leads-config.outputs.configured == 'true'
+        run: npm run build
+        working-directory: design-leads
+        env:
+          VITE_FIREBASE_API_KEY: ${{ vars.DESIGN_LEADS_VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.DESIGN_LEADS_VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.DESIGN_LEADS_VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.DESIGN_LEADS_VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.DESIGN_LEADS_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.DESIGN_LEADS_VITE_FIREBASE_APP_ID }}
+      - name: Fold Studio Leads into the Pages output
+        if: steps.design-leads-config.outputs.configured == 'true'
+        run: cp -r design-leads/dist dist/design-leads
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

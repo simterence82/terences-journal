@@ -1,0 +1,545 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Plus, Phone, Mail, MapPin, AlertTriangle, Handshake, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { useLeadsList, useCreateLead, useUpdateLead, useDeleteLead } from "../hooks/useLeads";
+import { useFollowUpsForLead, useCreateFollowUp } from "../hooks/useFollowUps";
+import { useDesignersList } from "../hooks/useUsers";
+import { useAuth } from "../lib/AuthContext";
+import { todayDateString } from "../lib/firestoreUtil";
+import { formatSGD } from "../lib/formatCurrency";
+import { Button } from "../components/Button";
+import { Input } from "../components/Input";
+import { Textarea } from "../components/Textarea";
+import { Select } from "../components/Select";
+import { Tabs } from "../components/Tabs";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
+import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
+import { EmptyState } from "../components/EmptyState";
+import { Skeleton } from "../components/Skeleton";
+import { StatusBadge } from "../components/StatusBadge";
+import { Badge } from "../components/Badge";
+import {
+  CLOSED_LEAD_STATUSES,
+  FOLLOW_UP_METHODS,
+  LEAD_SOURCES,
+  LEAD_STATUSES,
+  LEAD_STATUS_LABELS,
+  PROJECT_TYPES,
+  type Lead,
+  type LeadStatus,
+} from "../lib/types";
+
+const ACTIVE_STATUSES = LEAD_STATUSES.filter((s) => !CLOSED_LEAD_STATUSES.includes(s));
+
+function isOverdue(lead: Lead, today: string): boolean {
+  return !CLOSED_LEAD_STATUSES.includes(lead.status) && !!lead.nextFollowUpDate && lead.nextFollowUpDate < today;
+}
+
+const EMPTY_ADD_FORM = {
+  clientName: "",
+  phone: "",
+  email: "",
+  source: LEAD_SOURCES[0] as string,
+  projectType: PROJECT_TYPES[0] as string,
+  address: "",
+  budget: "",
+  notes: "",
+  assignedTo: "",
+  nextFollowUpDate: "",
+};
+
+export const LeadsPage: React.FC = () => {
+  const { authState } = useAuth();
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
+  const isAdmin = currentUser?.role === "admin";
+
+  const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
+  const designersQuery = useDesignersList();
+  const createMutation = useCreateLead();
+  const deleteMutation = useDeleteLead();
+  const deleteTarget = useConfirmDialog<Lead>();
+
+  const [tab, setTab] = useState<"active" | "signed" | "rejected">("active");
+  const [designerFilter, setDesignerFilter] = useState("all");
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState(EMPTY_ADD_FORM);
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+
+  const leads = leadsQuery.data ?? [];
+  const designers = designersQuery.data ?? [];
+  const today = todayDateString();
+
+  const filteredByDesigner = designerFilter === "all" ? leads : leads.filter((l) => l.assignedTo === designerFilter);
+  const activeLeads = filteredByDesigner.filter((l) => ACTIVE_STATUSES.includes(l.status));
+  const signedLeads = filteredByDesigner.filter((l) => l.status === "signed");
+  const rejectedLeads = filteredByDesigner.filter((l) => l.status === "rejected");
+  const visibleLeads = tab === "active" ? activeLeads : tab === "signed" ? signedLeads : rejectedLeads;
+
+  const selectedLead = useMemo(() => leads.find((l) => l.id === selectedLeadId) ?? null, [leads, selectedLeadId]);
+
+  useEffect(() => {
+    if (isAddOpen && designers.length > 0 && !addForm.assignedTo) {
+      setAddForm((p) => ({ ...p, assignedTo: designers[0].id }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAddOpen, designers.length]);
+
+  const resetAddForm = () => setAddForm(EMPTY_ADD_FORM);
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const designer = designers.find((d) => d.id === addForm.assignedTo);
+    if (!addForm.clientName || !designer) {
+      toast.error("Client name and an assigned designer are required");
+      return;
+    }
+    createMutation.mutate(
+      {
+        clientName: addForm.clientName,
+        phone: addForm.phone || null,
+        email: addForm.email || null,
+        source: addForm.source,
+        projectType: addForm.projectType,
+        address: addForm.address || null,
+        budget: addForm.budget ? Number(addForm.budget) : null,
+        notes: addForm.notes || null,
+        assignedTo: designer.id,
+        assignedToName: designer.displayName,
+        nextFollowUpDate: addForm.nextFollowUpDate || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Lead added");
+          resetAddForm();
+          setIsAddOpen(false);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add lead"),
+      }
+    );
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget.target) return;
+    await deleteMutation.mutateAsync(deleteTarget.target.id, {
+      onSuccess: () => {
+        toast.success("Lead deleted");
+        setSelectedLeadId(null);
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete lead"),
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-foreground">Leads</h1>
+          <p className="mt-1 text-[0.9375rem] text-muted-foreground">
+            {activeLeads.length} active · {activeLeads.filter((l) => isOverdue(l, today)).length} overdue for follow-up
+          </p>
+        </div>
+        {isAdmin && (
+          <Button onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Add Lead
+          </Button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as typeof tab)}
+          options={[
+            { value: "active", label: "Active", count: activeLeads.length },
+            { value: "signed", label: "Signed", count: signedLeads.length },
+            { value: "rejected", label: "Rejected", count: rejectedLeads.length },
+          ]}
+        />
+        {isAdmin && designers.length > 0 && (
+          <Select
+            value={designerFilter}
+            onValueChange={setDesignerFilter}
+            className="w-56"
+            options={[{ value: "all", label: "All Designers" }, ...designers.map((d) => ({ value: d.id, label: d.displayName }))]}
+          />
+        )}
+      </div>
+
+      {leadsQuery.isLoading ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} style={{ height: 160 }} />
+          ))}
+        </div>
+      ) : visibleLeads.length === 0 ? (
+        <EmptyState icon={<Handshake size={28} />} message={`No ${tab} leads.`} />
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleLeads.map((lead) => {
+            const overdue = isOverdue(lead, today);
+            return (
+              <button
+                key={lead.id}
+                type="button"
+                onClick={() => setSelectedLeadId(lead.id)}
+                className={`flex flex-col gap-3 rounded-lg border bg-card p-5 text-left shadow transition-shadow hover:shadow-md ${
+                  overdue ? "border-error" : "border-border"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[0.9375rem] font-semibold text-foreground">{lead.clientName}</span>
+                  <StatusBadge status={lead.status} />
+                </div>
+                <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  <span>
+                    {lead.projectType} · {lead.source}
+                  </span>
+                  {lead.phone && (
+                    <span className="flex items-center gap-1.5">
+                      <Phone size={12} /> {lead.phone}
+                    </span>
+                  )}
+                  {lead.email && (
+                    <span className="flex items-center gap-1.5">
+                      <Mail size={12} /> {lead.email}
+                    </span>
+                  )}
+                  {lead.address && (
+                    <span className="flex items-center gap-1.5">
+                      <MapPin size={12} /> {lead.address}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-border pt-2 text-xs">
+                  <span className="text-muted-foreground">{lead.assignedToName ?? "Unassigned"}</span>
+                  {lead.nextFollowUpDate && (
+                    <span className={`flex items-center gap-1 font-medium ${overdue ? "text-error" : "text-muted-foreground"}`}>
+                      {overdue && <AlertTriangle size={12} />}
+                      Next: {new Date(`${lead.nextFollowUpDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short" })}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetAddForm(); }} wide>
+        <DialogHeader>
+          <DialogTitle>Add Lead</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleAddSubmit} className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Client Name *</label>
+              <Input value={addForm.clientName} onChange={(e) => setAddForm((p) => ({ ...p, clientName: e.target.value }))} required />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Assign To Designer *</label>
+              <Select
+                value={addForm.assignedTo}
+                onValueChange={(v) => setAddForm((p) => ({ ...p, assignedTo: v }))}
+                options={designers.length > 0 ? designers.map((d) => ({ value: d.id, label: d.displayName })) : [{ value: "", label: "No designers yet" }]}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Phone</label>
+              <Input value={addForm.phone} onChange={(e) => setAddForm((p) => ({ ...p, phone: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Email</label>
+              <Input type="email" value={addForm.email} onChange={(e) => setAddForm((p) => ({ ...p, email: e.target.value }))} />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Source</label>
+              <Select value={addForm.source} onValueChange={(v) => setAddForm((p) => ({ ...p, source: v }))} options={LEAD_SOURCES.map((s) => ({ value: s, label: s }))} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Project Type</label>
+              <Select value={addForm.projectType} onValueChange={(v) => setAddForm((p) => ({ ...p, projectType: v }))} options={PROJECT_TYPES.map((s) => ({ value: s, label: s }))} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Address</label>
+            <Input value={addForm.address} onChange={(e) => setAddForm((p) => ({ ...p, address: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Budget (S$)</label>
+              <Input type="number" min="0" value={addForm.budget} onChange={(e) => setAddForm((p) => ({ ...p, budget: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">First Follow-up Due</label>
+              <Input type="date" value={addForm.nextFollowUpDate} onChange={(e) => setAddForm((p) => ({ ...p, nextFollowUpDate: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
+            <Textarea rows={2} value={addForm.notes} onChange={(e) => setAddForm((p) => ({ ...p, notes: e.target.value }))} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Saving..." : "Save Lead"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
+      {selectedLead && (
+        <LeadDetailDialog
+          lead={selectedLead}
+          isAdmin={isAdmin}
+          designers={designers}
+          onClose={() => setSelectedLeadId(null)}
+          onRequestDelete={() => deleteTarget.open(selectedLead)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={deleteTarget.isOpen}
+        onOpenChange={(open) => !open && deleteTarget.close()}
+        title="Delete this lead?"
+        description={`"${deleteTarget.target?.clientName ?? ""}" and its full follow-up history will be permanently removed. This can't be undone.`}
+        onConfirm={handleDelete}
+      />
+    </div>
+  );
+};
+
+const LeadDetailDialog: React.FC<{
+  lead: Lead;
+  isAdmin: boolean;
+  designers: { id: string; displayName: string }[];
+  onClose: () => void;
+  onRequestDelete: () => void;
+}> = ({ lead, isAdmin, designers, onClose, onRequestDelete }) => {
+  const updateMutation = useUpdateLead();
+  const followUpsQuery = useFollowUpsForLead(lead.id);
+  const createFollowUp = useCreateFollowUp();
+
+  const [status, setStatus] = useState<LeadStatus>(lead.status);
+  const [quotationAmount, setQuotationAmount] = useState(lead.quotationAmount?.toString() ?? "");
+  const [nextFollowUpDate, setNextFollowUpDate] = useState(lead.nextFollowUpDate ?? "");
+  const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? "");
+  const [notes, setNotes] = useState(lead.notes ?? "");
+
+  useEffect(() => {
+    setStatus(lead.status);
+    setQuotationAmount(lead.quotationAmount?.toString() ?? "");
+    setNextFollowUpDate(lead.nextFollowUpDate ?? "");
+    setAssignedTo(lead.assignedTo ?? "");
+    setNotes(lead.notes ?? "");
+  }, [lead]);
+
+  const [fuMethod, setFuMethod] = useState<string>(FOLLOW_UP_METHODS[0]);
+  const [fuOutcome, setFuOutcome] = useState("");
+  const [fuNextDate, setFuNextDate] = useState("");
+
+  const handleSaveDetails = () => {
+    const designer = designers.find((d) => d.id === assignedTo);
+    updateMutation.mutate(
+      {
+        id: lead.id,
+        status,
+        quotationAmount: quotationAmount ? Number(quotationAmount) : null,
+        nextFollowUpDate: nextFollowUpDate || null,
+        notes: notes || null,
+        ...(isAdmin && designer && designer.id !== lead.assignedTo
+          ? { assignedTo: designer.id, assignedToName: designer.displayName }
+          : {}),
+      },
+      {
+        onSuccess: () => toast.success("Lead updated"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update lead"),
+      }
+    );
+  };
+
+  const handleLogFollowUp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fuOutcome.trim()) {
+      toast.error("Describe what happened in this follow-up");
+      return;
+    }
+    createFollowUp.mutate(
+      {
+        leadId: lead.id,
+        method: fuMethod as any,
+        outcome: fuOutcome,
+        nextFollowUpDate: fuNextDate || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Follow-up logged");
+          setFuOutcome("");
+          setFuNextDate("");
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to log follow-up"),
+      }
+    );
+  };
+
+  const quickClose = (newStatus: "signed" | "rejected") => {
+    if (!fuOutcome.trim()) {
+      toast.error("Describe what happened before closing the lead");
+      return;
+    }
+    createFollowUp.mutate(
+      { leadId: lead.id, method: fuMethod as any, outcome: fuOutcome, nextFollowUpDate: null, newStatus },
+      {
+        onSuccess: () => {
+          toast.success(newStatus === "signed" ? "Lead marked as signed" : "Lead marked as rejected");
+          setFuOutcome("");
+          setFuNextDate("");
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update lead"),
+      }
+    );
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()} wide>
+      <DialogHeader>
+        <div className="flex items-center gap-2">
+          <DialogTitle>{lead.clientName}</DialogTitle>
+          <StatusBadge status={lead.status} />
+        </div>
+      </DialogHeader>
+
+      <div className="flex flex-col gap-6">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-2 rounded-lg border border-border bg-surface p-4 text-[0.8125rem] sm:grid-cols-2">
+          <div>
+            <span className="text-muted-foreground">Contact: </span>
+            <span className="text-foreground">{[lead.phone, lead.email].filter(Boolean).join(" · ") || "—"}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Address: </span>
+            <span className="text-foreground">{lead.address ?? "—"}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Source: </span>
+            <span className="text-foreground">{lead.source}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Project Type: </span>
+            <span className="text-foreground">{lead.projectType}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Budget: </span>
+            <span className="text-foreground">{lead.budget != null ? formatSGD(lead.budget) : "—"}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Logged: </span>
+            <span className="text-foreground">
+              {new Date(lead.createdAt).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
+              {lead.createdByName ? ` by ${lead.createdByName}` : ""}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <h3 className="font-display text-base font-semibold text-foreground">Status &amp; Deal</h3>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Status</label>
+              <Select value={status} onValueChange={(v) => setStatus(v as LeadStatus)} options={LEAD_STATUSES.map((s) => ({ value: s, label: LEAD_STATUS_LABELS[s] }))} />
+            </div>
+            {isAdmin && (
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-foreground">Assigned To</label>
+                <Select value={assignedTo} onValueChange={setAssignedTo} options={designers.map((d) => ({ value: d.id, label: d.displayName }))} />
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Quotation Amount (S$)</label>
+              <Input type="number" min="0" value={quotationAmount} onChange={(e) => setQuotationAmount(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Next Follow-up Due</label>
+              <Input type="date" value={nextFollowUpDate} onChange={(e) => setNextFollowUpDate(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
+            <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="General notes about this client/project" />
+          </div>
+          <div className="flex items-center justify-between">
+            {isAdmin ? (
+              <Button variant="ghost" size="sm" onClick={onRequestDelete} className="text-error">
+                <Trash2 size={14} /> Delete Lead
+              </Button>
+            ) : (
+              <span />
+            )}
+            <Button onClick={handleSaveDetails} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t border-border pt-5">
+          <h3 className="font-display text-base font-semibold text-foreground">Follow-up Timeline</h3>
+          {followUpsQuery.isLoading ? (
+            <Skeleton style={{ height: 60 }} />
+          ) : (followUpsQuery.data ?? []).length === 0 ? (
+            <p className="text-[0.8125rem] text-muted-foreground">No follow-ups logged yet.</p>
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {followUpsQuery.data!.map((fu) => (
+                <li key={fu.id} className="rounded-lg border border-border bg-card p-3 text-[0.8125rem]">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <Badge variant="outline">{fu.method}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(fu.loggedAt).toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {fu.loggedByName}
+                    </span>
+                  </div>
+                  <p className="text-foreground">{fu.outcome}</p>
+                  {fu.nextFollowUpDate && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Next follow-up set for {new Date(`${fu.nextFollowUpDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short" })}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {!CLOSED_LEAD_STATUSES.includes(lead.status) && (
+            <form onSubmit={handleLogFollowUp} className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
+              <h4 className="text-[0.8125rem] font-semibold text-foreground">Log a Follow-up</h4>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Select value={fuMethod} onValueChange={setFuMethod} options={FOLLOW_UP_METHODS.map((m) => ({ value: m, label: m }))} />
+                <Input type="date" value={fuNextDate} onChange={(e) => setFuNextDate(e.target.value)} placeholder="Next follow-up date" />
+              </div>
+              <Textarea
+                rows={2}
+                value={fuOutcome}
+                onChange={(e) => setFuOutcome(e.target.value)}
+                placeholder="What happened? Did they respond? Any objections, next steps..."
+                required
+              />
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button type="button" variant="destructive" size="sm" onClick={() => quickClose("rejected")} disabled={createFollowUp.isPending}>
+                  Log &amp; Mark Rejected
+                </Button>
+                <Button type="button" variant="secondary" size="sm" onClick={() => quickClose("signed")} disabled={createFollowUp.isPending}>
+                  Log &amp; Mark Signed
+                </Button>
+                <Button type="submit" size="sm" disabled={createFollowUp.isPending}>
+                  {createFollowUp.isPending ? "Saving..." : "Log Follow-up"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </Dialog>
+  );
+};

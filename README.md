@@ -11,6 +11,12 @@ login, Cloud Firestore for every record and file attachment. That makes it
 deployable to plain static hosting like **GitHub Pages**, with GitHub
 Actions handling the build/deploy and a small daily maintenance job.
 
+> **This repo also hosts [Studio Leads](design-leads/README.md)**, a
+> separate lead-tracking, attendance, and staff-KPI app for the interior
+> design firm side of the business — its own codebase, its own Firebase
+> project and login, published alongside this journal under `/design-leads/`
+> on the same GitHub Pages site. See `design-leads/README.md` for setup.
+
 ## Features
 
 - **Dashboard** — Gregorian + Chinese lunar date, today's schedule, open
