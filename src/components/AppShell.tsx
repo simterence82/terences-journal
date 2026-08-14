@@ -54,10 +54,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           navOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="mb-8 flex items-center justify-between px-2 text-primary">
-          <div className="flex items-center gap-2">
-            <BookOpen size={22} />
-            <span className="font-display text-lg font-semibold text-foreground">Terence's Journal</span>
+        <div className="mb-6 flex items-center justify-between border-b border-border px-2 pb-6">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary-tint)] text-primary">
+              <BookOpen size={18} />
+            </span>
+            <span className="font-display text-lg font-semibold leading-tight text-foreground">Terence's Journal</span>
           </div>
           <button
             type="button"
@@ -77,8 +79,10 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               end={end}
               onClick={() => setNavOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 rounded px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`
               }
             >
@@ -111,7 +115,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </button>
             {user && (
               <div className="flex items-center gap-2 border-l border-border pl-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--primary-tint)] text-xs font-semibold text-primary">
                   {initials}
                 </div>
                 <div className="hidden flex-col gap-0.5 sm:flex">

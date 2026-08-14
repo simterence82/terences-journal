@@ -152,4 +152,10 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-family-base);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--primary-tint);
 }

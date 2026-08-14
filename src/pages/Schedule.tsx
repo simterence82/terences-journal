@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Trash2, CalendarClock } from "lucide-react";
+import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useScheduleList, useCreateSchedule, useDeleteSchedule } from "../hooks/useSchedule";
 import { useAuth } from "../lib/AuthContext";
@@ -119,13 +120,10 @@ export const SchedulePage: React.FC = () => {
             <Skeleton style={{ height: 200 }} />
           </div>
         ) : entries.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-            <CalendarClock size={32} />
-            <p>No schedule entries yet.</p>
-          </div>
+          <EmptyState icon={<CalendarClock size={28} />} message="No schedule entries yet." />
         ) : (
           <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead>
+            <thead className="bg-surface">
               <tr>
                 {["Date", "Time", "Title", "Location", "Notes", ""].map((h) => (
                   <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">

@@ -7,6 +7,7 @@ import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import { EmptyState } from "../components/EmptyState";
 import type { PendingUser, User } from "../lib/types";
 
 export const UsersPage: React.FC = () => {
@@ -65,13 +66,10 @@ export const UsersPage: React.FC = () => {
               <Skeleton style={{ height: 100 }} />
             </div>
           ) : pendingUsers.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground">
-              <UserCheck size={28} />
-              <p>No pending requests.</p>
-            </div>
+            <EmptyState icon={<UserCheck size={26} />} message="No pending requests." className="py-10" />
           ) : (
             <table className="w-full text-[0.8125rem]">
-              <thead>
+              <thead className="bg-surface">
                 <tr>
                   {["Display Name", "Username", "Requested", ""].map((h) => (
                     <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -127,13 +125,10 @@ export const UsersPage: React.FC = () => {
               <Skeleton style={{ height: 200 }} />
             </div>
           ) : users.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-              <UsersIcon size={32} />
-              <p>No users yet.</p>
-            </div>
+            <EmptyState icon={<UsersIcon size={28} />} message="No users yet." />
           ) : (
             <table className="w-full text-[0.8125rem]">
-              <thead>
+              <thead className="bg-surface">
                 <tr>
                   {["Display Name", "Username", "Role", "Created", ""].map((h) => (
                     <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">

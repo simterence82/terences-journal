@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Lightbulb, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useLightingList, useCreateLighting, useUpdateLighting, useDeleteLighting } from "../hooks/useLighting";
 import { useLookups } from "../hooks/useLookups";
@@ -158,10 +159,10 @@ export const LightingPage: React.FC = () => {
             <Skeleton style={{ height: 200 }} />
           </div>
         ) : entries.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">No lighting purchases recorded yet.</p>
+          <EmptyState icon={<Lightbulb size={28} />} message="No lighting purchases recorded yet." />
         ) : (
           <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead>
+            <thead className="bg-surface">
               <tr>
                 {["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Notes", "Paid", "Reimbursed", ""].map((h) => (
                   <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">

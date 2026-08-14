@@ -113,7 +113,9 @@ export const DashboardPage: React.FC = () => {
           <ul className="flex flex-col gap-2">
             {todaysSchedule.map((entry) => (
               <li key={entry.id} className="flex items-center gap-3 rounded border border-border bg-surface p-3">
-                <CalendarClock size={16} className="text-primary" />
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--primary-tint)] text-primary">
+                  <CalendarClock size={15} />
+                </span>
                 <div className="flex flex-1 flex-col">
                   <span className="text-sm font-medium text-foreground">{entry.title}</span>
                   {(entry.startTime || entry.location) && (
@@ -136,24 +138,28 @@ export const DashboardPage: React.FC = () => {
           value={tasksQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : openTasks.length}
           sublabel={`${(tasksQuery.data ?? []).length} total`}
           icon={<ListChecks size={18} />}
+          tone="primary"
         />
         <SummaryCard
           label="Unresolved Issues"
           value={issuesQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : unresolvedIssues.length}
           sublabel={`${(issuesQuery.data ?? []).length} total`}
           icon={<AlertTriangle size={18} />}
+          tone="destructive"
         />
         <SummaryCard
           label="Lighting Profit"
           value={lightingQuery.isLoading ? <Skeleton style={{ width: 80, height: 32 }} /> : formatSGD(totalLightingProfit)}
           sublabel={`${(lightingQuery.data ?? []).length} entries`}
           icon={<Lightbulb size={18} />}
+          tone="warning"
         />
         <SummaryCard
           label="Blum Total"
           value={blumQuery.isLoading ? <Skeleton style={{ width: 80, height: 32 }} /> : formatSGD(totalBlumAmount)}
           sublabel={`${(blumQuery.data ?? []).length} orders`}
           icon={<Package size={18} />}
+          tone="secondary"
         />
       </div>
 

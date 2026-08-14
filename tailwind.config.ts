@@ -10,6 +10,8 @@ export default {
         foreground: "var(--foreground)",
         surface: "var(--surface)",
         "surface-foreground": "var(--surface-foreground)",
+        sidebar: "var(--sidebar)",
+        "sidebar-foreground": "var(--sidebar-foreground)",
         card: "var(--card)",
         "card-foreground": "var(--card-foreground)",
         popup: "var(--popup)",

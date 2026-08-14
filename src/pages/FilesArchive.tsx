@@ -5,6 +5,7 @@ import { downloadTaskFile } from "../hooks/useTasks";
 import { downloadIssueFile } from "../hooks/useIssues";
 import { Badge } from "../components/Badge";
 import { Skeleton } from "../components/Skeleton";
+import { EmptyState } from "../components/EmptyState";
 
 export const FilesArchivePage: React.FC = () => {
   const listQuery = useFilesArchiveList();
@@ -23,13 +24,10 @@ export const FilesArchivePage: React.FC = () => {
             <Skeleton style={{ height: 200 }} />
           </div>
         ) : files.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-            <FolderArchive size={32} />
-            <p>No files uploaded yet.</p>
-          </div>
+          <EmptyState icon={<FolderArchive size={28} />} message="No files uploaded yet." />
         ) : (
           <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead>
+            <thead className="bg-surface">
               <tr>
                 {["File", "Source", "From", "Uploaded", ""].map((h) => (
                   <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">

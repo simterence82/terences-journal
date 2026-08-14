@@ -78,12 +78,19 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-lg sm:p-8">
-        <div className="mb-2 flex items-center gap-3 text-primary">
-          <BookOpen size={28} />
-          <h1 className="font-display text-2xl font-semibold text-foreground">Terence's Journal</h1>
-        </div>
+    <div
+      className="flex min-h-screen items-center justify-center bg-background p-6"
+      style={{ backgroundImage: "radial-gradient(circle at 20% 15%, var(--primary-tint), transparent 55%), radial-gradient(circle at 85% 85%, var(--secondary-tint), transparent 50%)" }}
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-lg border border-border bg-card shadow-lg">
+        <div className="h-1.5 w-full bg-primary" />
+        <div className="p-6 sm:p-8">
+          <div className="mb-2 flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-tint)] text-primary">
+              <BookOpen size={20} />
+            </span>
+            <h1 className="font-display text-2xl font-semibold text-foreground">Terence's Journal</h1>
+          </div>
 
         {setupCheckError ? (
           <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -151,6 +158,7 @@ export const LoginPage: React.FC = () => {
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );

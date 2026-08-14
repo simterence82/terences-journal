@@ -6,6 +6,7 @@ import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import { EmptyState } from "../components/EmptyState";
 import type { TrashItem } from "../lib/types";
 
 const KIND_LABEL: Record<TrashItem["kind"], string> = {
@@ -65,13 +66,10 @@ export const TrashPage: React.FC = () => {
             <Skeleton style={{ height: 200 }} />
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-            <Trash size={32} />
-            <p>Trash Bin is empty.</p>
-          </div>
+          <EmptyState icon={<Trash size={28} />} message="Trash Bin is empty." />
         ) : (
           <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead>
+            <thead className="bg-surface">
               <tr>
                 {["Type", "Title", "Deleted", "Auto-delete in", ""].map((h) => (
                   <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">

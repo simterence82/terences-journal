@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, Pencil, Paperclip, Download, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 import { useTasksList, useCreateTask, useUpdateTask, useDeleteTask, downloadTaskFile } from "../hooks/useTasks";
+import { EmptyState } from "../components/EmptyState";
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
 import { AutoCompleteField } from "../components/AutoCompleteField";
@@ -218,14 +219,11 @@ export const TasksPage: React.FC = () => {
           {[1, 2, 3].map((i) => <Skeleton key={i} style={{ height: 140 }} />)}
         </div>
       ) : visibleTasks.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-          <ListChecks size={32} />
-          <p>No {statusTab === "open" ? "outstanding" : "completed"} tasks.</p>
-        </div>
+        <EmptyState icon={<ListChecks size={28} />} message={`No ${statusTab === "open" ? "outstanding" : "completed"} tasks.`} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleTasks.map((task) => (
-            <div key={task.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow ${task.done ? "opacity-60" : ""}`}>
+            <div key={task.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow transition-shadow hover:shadow-md ${task.done ? "opacity-60" : ""}`}>
               <div className="flex items-center gap-3">
                 <Checkbox checked={task.done} onChange={() => toggleDone(task.id, task.done)} aria-label="Mark done" />
                 <span className={`flex-1 text-[0.9375rem] font-semibold text-foreground ${task.done ? "line-through" : ""}`}>{task.title}</span>

@@ -9,11 +9,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: "bg-primary text-primary-foreground hover:opacity-90",
+  primary: "bg-primary text-primary-foreground shadow-sm hover:opacity-90 hover:shadow-md",
   outline: "border border-border bg-transparent text-foreground hover:bg-muted",
   ghost: "bg-transparent text-foreground hover:bg-muted",
-  secondary: "bg-secondary text-secondary-foreground hover:opacity-90",
-  destructive: "bg-error text-error-foreground hover:opacity-90",
+  secondary: "bg-secondary text-secondary-foreground shadow-sm hover:opacity-90 hover:shadow-md",
+  destructive: "bg-error text-error-foreground shadow-sm hover:opacity-90 hover:shadow-md",
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
@@ -30,7 +30,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         type={type}
         disabled={disabled}
-        className={`inline-flex items-center rounded font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:shadow-focus ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
+        className={`inline-flex items-center rounded font-medium transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100 focus-visible:outline-none focus-visible:shadow-focus ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${className}`}
         {...props}
       />
     );

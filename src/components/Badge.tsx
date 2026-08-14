@@ -17,7 +17,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
 
 export const Badge: React.FC<BadgeProps> = ({ variant = "primary", className = "", children, ...props }) => (
   <span
-    className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium capitalize ${VARIANT_CLASSES[variant]} ${className}`}
+    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${VARIANT_CLASSES[variant]} ${className}`}
     {...props}
   >
     {children}

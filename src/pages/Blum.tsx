@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Plus, Trash2, Package, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useBlumList, useCreateBlum, useUpdateBlum, useDeleteBlum } from "../hooks/useBlum";
 import { useLookups } from "../hooks/useLookups";
@@ -123,10 +124,10 @@ export const BlumPage: React.FC = () => {
             <Skeleton style={{ height: 200 }} />
           </div>
         ) : entries.length === 0 ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">No Blum orders recorded yet.</p>
+          <EmptyState icon={<Package size={28} />} message="No Blum orders recorded yet." />
         ) : (
           <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead>
+            <thead className="bg-surface">
               <tr>
                 {["Date", "Order Name", "Amount", "Notes", "Paid", "Reimbursed", ""].map((h) => (
                   <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">

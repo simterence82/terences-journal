@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, Pencil, Paperclip, Download, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useIssuesList, useCreateIssue, useUpdateIssue, useDeleteIssue, downloadIssueFile } from "../hooks/useIssues";
+import { EmptyState } from "../components/EmptyState";
 import { useAuth } from "../lib/AuthContext";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -175,14 +176,11 @@ export const IssuesPage: React.FC = () => {
           {[1, 2, 3].map((i) => <Skeleton key={i} style={{ height: 140 }} />)}
         </div>
       ) : visibleIssues.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-          <AlertTriangle size={32} />
-          <p>No {statusTab} issues.</p>
-        </div>
+        <EmptyState icon={<AlertTriangle size={28} />} message={`No ${statusTab} issues.`} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleIssues.map((issue) => (
-            <div key={issue.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow ${issue.resolved ? "opacity-65" : ""}`}>
+            <div key={issue.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow transition-shadow hover:shadow-md ${issue.resolved ? "opacity-65" : ""}`}>
               <div className="flex items-center gap-3">
                 <Checkbox checked={issue.resolved} onChange={() => toggleResolved(issue.id, issue.resolved)} aria-label="Mark resolved" />
                 <span className={`flex-1 text-[0.9375rem] font-semibold text-foreground ${issue.resolved ? "line-through" : ""}`}>{issue.title}</span>
