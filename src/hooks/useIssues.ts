@@ -1,10 +1,66 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPatch, apiDelete, apiUpload } from "../lib/apiClient";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
+import { toIso } from "../lib/firestoreUtil";
 import type { Issue } from "../lib/types";
 
 const KEY = ["issues"] as const;
+const COLLECTION = "issues";
+const FILES_COLLECTION = "issueFiles";
 
-export const useIssuesList = () => useQuery({ queryKey: KEY, queryFn: () => apiGet<Issue[]>("/issues") });
+const ALLOWED_ISSUE_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+
+// Firestore documents are capped at 1MiB; base64 inflates raw bytes by ~33%,
+// so the effective raw-file ceiling here is roughly 700 * 1024 bytes. Not
+// enforced client-side -- an oversized file simply fails the setDoc below and
+// surfaces via the mutation's onError.
+
+function toIssue(id: string, data: Record<string, any>): Issue {
+  return {
+    id,
+    title: data.title,
+    description: data.description,
+    resolved: data.resolved,
+    fileName: data.fileName,
+    fileType: data.fileType,
+    createdBy: data.createdBy,
+    createdAt: toIso(data.createdAt),
+  };
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export const useIssuesList = () =>
+  useQuery({
+    queryKey: KEY,
+    queryFn: async () => {
+      const snap = await getDocs(query(collection(db, COLLECTION), where("isDeleted", "==", false)));
+      const items = snap.docs.map((d) => toIssue(d.id, d.data()));
+      items.sort((a, b) => {
+        if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
+        return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+      });
+      return items;
+    },
+  });
 
 export interface IssueCreateInput {
   title: string;
@@ -15,19 +71,34 @@ export interface IssueCreateInput {
 export const useCreateIssue = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: IssueCreateInput) => {
-      const form = new FormData();
-      form.set("title", input.title);
-      if (input.description) form.set("description", input.description);
-      if (input.file) form.set("file", input.file);
-      return apiUpload<Issue>("/issues", form);
+    mutationFn: async (input: IssueCreateInput) => {
+      if (input.file && !ALLOWED_ISSUE_FILE_TYPES.includes(input.file.type)) {
+        throw new Error("Only PDF, JPEG, or PNG attachments are allowed");
+      }
+      const ref = await addDoc(collection(db, COLLECTION), {
+        title: input.title,
+        description: input.description ?? null,
+        resolved: false,
+        fileName: input.file?.name ?? null,
+        fileType: input.file ? input.file.type || "application/octet-stream" : null,
+        hasFile: !!input.file,
+        createdBy: auth.currentUser?.uid ?? null,
+        createdAt: serverTimestamp(),
+        isDeleted: false,
+      });
+      if (input.file) {
+        const fileData = await fileToBase64(input.file);
+        await setDoc(doc(db, FILES_COLLECTION, ref.id), { fileData });
+      }
+      const snap = await getDoc(ref);
+      return toIssue(snap.id, snap.data()!);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
 
 export interface IssueUpdateInput {
-  id: number;
+  id: string;
   title?: string;
   description?: string | null;
   resolved?: boolean;
@@ -36,7 +107,12 @@ export interface IssueUpdateInput {
 export const useUpdateIssue = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...updates }: IssueUpdateInput) => apiPatch<Issue>(`/issues/${id}`, updates),
+    mutationFn: async ({ id, ...updates }: IssueUpdateInput) => {
+      const ref = doc(db, COLLECTION, id);
+      await updateDoc(ref, updates);
+      const snap = await getDoc(ref);
+      return toIssue(snap.id, snap.data()!);
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
@@ -44,11 +120,28 @@ export const useUpdateIssue = () => {
 export const useDeleteIssue = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => apiDelete<{ success: true }>(`/issues/${id}`),
+    mutationFn: async (id: string) => {
+      await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
+      return { success: true as const };
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
 
-export function downloadIssueFile(id: number) {
-  window.open(`/api/issues/${id}/file`, "_blank", "noopener,noreferrer");
+export async function downloadIssueFile(id: string, fileName: string, fileType: string | null): Promise<void> {
+  const snap = await getDoc(doc(db, FILES_COLLECTION, id));
+  if (!snap.exists()) return;
+  const { fileData } = snap.data() as { fileData: string };
+  const binary = atob(fileData);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: fileType ?? "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

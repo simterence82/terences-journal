@@ -36,7 +36,7 @@ export const LightingPage: React.FC = () => {
   const createMutation = useCreateLighting();
   const updateMutation = useUpdateLighting();
   const deleteMutation = useDeleteLighting();
-  const deleteTarget = useConfirmDialog<number>();
+  const deleteTarget = useConfirmDialog<string>();
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -78,7 +78,7 @@ export const LightingPage: React.FC = () => {
     );
   };
 
-  const toggleField = (id: number, field: "paidToSeller" | "reimbursed", current: boolean) => {
+  const toggleField = (id: string, field: "paidToSeller" | "reimbursed", current: boolean) => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
   };
 

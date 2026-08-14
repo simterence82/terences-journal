@@ -34,7 +34,7 @@ export const TasksPage: React.FC = () => {
   const createMutation = useCreateTask();
   const updateMutation = useUpdateTask();
   const deleteMutation = useDeleteTask();
-  const deleteTarget = useConfirmDialog<number>();
+  const deleteTarget = useConfirmDialog<string>();
 
   const [statusTab, setStatusTab] = useState<"open" | "done">("open");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -72,7 +72,7 @@ export const TasksPage: React.FC = () => {
     );
   };
 
-  const toggleDone = (id: number, done: boolean) => {
+  const toggleDone = (id: string, done: boolean) => {
     updateMutation.mutate({ id, done: !done }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update task") });
   };
 
@@ -238,7 +238,7 @@ export const TasksPage: React.FC = () => {
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
                 {task.fileName ? (
-                  <button type="button" onClick={() => downloadTaskFile(task.id)} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                  <button type="button" onClick={() => void downloadTaskFile(task.id, task.fileName!, task.fileType)} className="flex items-center gap-1 text-xs text-primary hover:underline">
                     <Download size={14} /> {task.fileName}
                   </button>
                 ) : <span />}

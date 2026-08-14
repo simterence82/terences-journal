@@ -26,7 +26,7 @@ export const BlumPage: React.FC = () => {
   const createMutation = useCreateBlum();
   const updateMutation = useUpdateBlum();
   const deleteMutation = useDeleteBlum();
-  const deleteTarget = useConfirmDialog<number>();
+  const deleteTarget = useConfirmDialog<string>();
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -58,7 +58,7 @@ export const BlumPage: React.FC = () => {
     );
   };
 
-  const toggleField = (id: number, field: "paidToSeller" | "reimbursed", current: boolean) => {
+  const toggleField = (id: string, field: "paidToSeller" | "reimbursed", current: boolean) => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
   };
 

@@ -19,7 +19,7 @@ export const SchedulePage: React.FC = () => {
   const listQuery = useScheduleList();
   const createMutation = useCreateSchedule();
   const deleteMutation = useDeleteSchedule();
-  const deleteTarget = useConfirmDialog<number>();
+  const deleteTarget = useConfirmDialog<string>();
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);

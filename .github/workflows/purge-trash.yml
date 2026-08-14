@@ -1,0 +1,22 @@
+name: Purge expired trash
+
+on:
+  schedule:
+    - cron: "0 18 * * *" # once a day
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Write service account key
+        run: echo "$FIREBASE_SERVICE_ACCOUNT" > firebase-service-account.json
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - run: npm run purge
