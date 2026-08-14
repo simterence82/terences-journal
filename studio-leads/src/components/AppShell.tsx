@@ -15,6 +15,7 @@ import {
 import { useAuth } from "../lib/AuthContext";
 import { useThemeMode } from "../lib/useThemeMode";
 import { Badge } from "./Badge";
+import { USER_ROLE_LABELS, type UserRole } from "../lib/types";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, adminOnly: false },
@@ -23,6 +24,12 @@ const NAV_ITEMS = [
   { to: "/kpi", label: "KPI & Grading", icon: Trophy, end: false, adminOnly: false },
   { to: "/users", label: "Users", icon: UsersIcon, end: false, adminOnly: true },
 ] as const;
+
+const ROLE_BADGE_VARIANT: Record<UserRole, "brand" | "ok" | "accent"> = {
+  super_admin: "brand",
+  admin: "ok",
+  designer: "accent",
+};
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { authState, logout } = useAuth();
@@ -34,7 +41,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     ? user.displayName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
     : "";
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin");
+  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin" || user?.role === "super_admin");
 
   return (
     <div className="flex min-h-screen flex-col bg-bg">
@@ -81,8 +88,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 </div>
                 <div className="hidden flex-col gap-0.5 md:flex">
                   <span className="text-[0.8125rem] font-semibold leading-none text-ink">{user.displayName}</span>
-                  <Badge variant={user.role === "admin" ? "brand" : "accent"} className="w-fit">
-                    {user.role}
+                  <Badge variant={ROLE_BADGE_VARIANT[user.role]} className="w-fit">
+                    {USER_ROLE_LABELS[user.role]}
                   </Badge>
                 </div>
                 <button

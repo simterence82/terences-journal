@@ -42,15 +42,17 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
     try {
       if (isFirstRun) {
-        // Bootstrapping the first admin: create the Firebase Auth account,
-        // then atomically create their users/{uid} doc (role: admin) and
-        // the meta/setup sentinel that marks bootstrap as done.
-        // firestore.rules allows exactly this one self-created admin doc,
-        // and only while meta/setup doesn't exist.
+        // Bootstrapping the first account: create the Firebase Auth
+        // account, then atomically create their users/{uid} doc (role:
+        // super_admin -- the top tier, since no one else exists yet to
+        // grant them access) and the meta/setup sentinel that marks
+        // bootstrap as done. firestore.rules allows exactly this one
+        // self-created super_admin doc, and only while meta/setup doesn't
+        // exist.
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, { displayName });
         const batch = writeBatch(db);
-        batch.set(doc(db, "users", cred.user.uid), { email, displayName, role: "admin", createdAt: serverTimestamp() });
+        batch.set(doc(db, "users", cred.user.uid), { email, displayName, role: "super_admin", createdAt: serverTimestamp() });
         batch.set(doc(db, "meta", "setup"), { initializedBy: cred.user.uid, initializedAt: serverTimestamp() });
         await batch.commit();
       } else if (mode === "signup") {
@@ -99,7 +101,7 @@ export const LoginPage: React.FC = () => {
             <>
               <p className="mb-6 text-sm text-faint-ink">
                 {isFirstRun
-                  ? "No admin account exists yet. Create the first admin account to get started."
+                  ? "No account exists yet. Create the first super admin account to get started."
                   : mode === "signup"
                     ? "Request access — an admin will need to approve your account before you can sign in."
                     : "Sign in to continue to Studio Leads."}
@@ -132,7 +134,7 @@ export const LoginPage: React.FC = () => {
                   />
                 </div>
                 <Button type="submit" disabled={isLoading} className="mt-2 justify-center">
-                  {isLoading ? "Please wait..." : isFirstRun ? "Create Admin Account" : mode === "signup" ? "Request Access" : "Log In"}
+                  {isLoading ? "Please wait..." : isFirstRun ? "Create Super Admin Account" : mode === "signup" ? "Request Access" : "Log In"}
                 </Button>
               </form>
 

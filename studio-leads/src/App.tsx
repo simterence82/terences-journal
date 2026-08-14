@@ -8,13 +8,15 @@ import { KpiPage } from "./pages/Kpi";
 import { UsersPage } from "./pages/Users";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
+const EVERYONE = ["super_admin", "admin", "designer"] as const;
+
 export const App: React.FC = () => (
   <Routes>
     <Route path="/login" element={<LoginPage />} />
     <Route
       path="/"
       element={
-        <ProtectedRoute roles={["admin", "designer"]}>
+        <ProtectedRoute roles={[...EVERYONE]}>
           <DashboardPage />
         </ProtectedRoute>
       }
@@ -22,7 +24,7 @@ export const App: React.FC = () => (
     <Route
       path="/leads"
       element={
-        <ProtectedRoute roles={["admin", "designer"]}>
+        <ProtectedRoute roles={[...EVERYONE]}>
           <LeadsPage />
         </ProtectedRoute>
       }
@@ -30,7 +32,7 @@ export const App: React.FC = () => (
     <Route
       path="/attendance"
       element={
-        <ProtectedRoute roles={["admin", "designer"]}>
+        <ProtectedRoute roles={[...EVERYONE]}>
           <AttendancePage />
         </ProtectedRoute>
       }
@@ -38,7 +40,7 @@ export const App: React.FC = () => (
     <Route
       path="/kpi"
       element={
-        <ProtectedRoute roles={["admin", "designer"]}>
+        <ProtectedRoute roles={[...EVERYONE]}>
           <KpiPage />
         </ProtectedRoute>
       }
@@ -46,7 +48,7 @@ export const App: React.FC = () => (
     <Route
       path="/users"
       element={
-        <ProtectedRoute roles={["admin"]}>
+        <ProtectedRoute roles={["super_admin", "admin"]}>
           <UsersPage />
         </ProtectedRoute>
       }

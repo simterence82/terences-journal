@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
-import { CLOSED_LEAD_STATUSES, type Lead, type LeadStatus } from "../lib/types";
+import { CLOSED_LEAD_STATUSES, isAdminRole, type Lead, type LeadStatus, type Viewer } from "../lib/types";
 
 const COLLECTION = "leads";
 
@@ -48,15 +48,14 @@ function toLead(id: string, data: Record<string, any>): Lead {
  * returned doc's assignedTo) to allow the read at all. Admins get every
  * lead.
  */
-export const useLeadsList = (viewer: { id: string; role: "admin" | "designer" } | null) =>
+export const useLeadsList = (viewer: Viewer | null) =>
   useQuery({
-    queryKey: ["leads", viewer?.role === "admin" ? "all" : viewer?.id],
+    queryKey: ["leads", viewer && isAdminRole(viewer.role) ? "all" : viewer?.id],
     enabled: !!viewer,
     queryFn: async () => {
-      const q =
-        viewer!.role === "admin"
-          ? collection(db, COLLECTION)
-          : query(collection(db, COLLECTION), where("assignedTo", "==", viewer!.id));
+      const q = isAdminRole(viewer!.role)
+        ? collection(db, COLLECTION)
+        : query(collection(db, COLLECTION), where("assignedTo", "==", viewer!.id));
       const snap = await getDocs(q);
       const items = snap.docs.map((d) => toLead(d.id, d.data()));
       items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));

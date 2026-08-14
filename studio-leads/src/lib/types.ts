@@ -1,4 +1,27 @@
-export type UserRole = "admin" | "designer";
+// Three tiers: a designer only ever sees their own leads/attendance/KPI;
+// an admin runs day-to-day operations (leads, attendance, approving new
+// designers); a super admin does everything an admin does, plus is the
+// only one who can create/edit/remove other admins (or super admins) --
+// see firestore.rules and Users.tsx.
+export const USER_ROLES = ["super_admin", "admin", "designer"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  designer: "Designer",
+};
+
+/** "admin" and "super_admin" both get the full (unscoped) view of leads/attendance/etc. */
+export function isAdminRole(role: UserRole): boolean {
+  return role === "admin" || role === "super_admin";
+}
+
+/** The shape hooks need to decide how much data to fetch/show. */
+export interface Viewer {
+  id: string;
+  role: UserRole;
+}
 
 export interface User {
   id: string;
@@ -101,12 +124,38 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   absent: "Absent",
 };
 
+// Why someone isn't (fully) in office -- set whenever status isn't
+// "present". Singapore-workplace-flavoured but easy to extend.
+export const ATTENDANCE_REASONS = [
+  "annual_leave",
+  "mc",
+  "childcare_leave",
+  "compassionate_leave",
+  "unpaid_leave",
+  "off_in_lieu",
+  "unauthorized",
+  "other",
+] as const;
+export type AttendanceReason = (typeof ATTENDANCE_REASONS)[number];
+
+export const ATTENDANCE_REASON_LABELS: Record<AttendanceReason, string> = {
+  annual_leave: "Annual Leave",
+  mc: "MC (Medical Certificate)",
+  childcare_leave: "Childcare Leave",
+  compassionate_leave: "Compassionate Leave",
+  unpaid_leave: "Unpaid Leave",
+  off_in_lieu: "Off In Lieu",
+  unauthorized: "Unauthorized / No Notice",
+  other: "Other",
+};
+
 export interface AttendanceRecord {
   id: string;
   designerId: string;
   designerName: string;
   date: string;
   status: AttendanceStatus;
+  reason: AttendanceReason | null;
   notes: string | null;
   markedBy: string | null;
   markedAt: string | null;

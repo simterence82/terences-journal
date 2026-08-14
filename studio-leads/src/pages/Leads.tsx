@@ -25,6 +25,7 @@ import {
   LEAD_STATUSES,
   LEAD_STATUS_LABELS,
   PROJECT_TYPES,
+  isAdminRole,
   type Lead,
   type LeadStatus,
 } from "../lib/types";
@@ -51,7 +52,7 @@ const EMPTY_ADD_FORM = {
 export const LeadsPage: React.FC = () => {
   const { authState } = useAuth();
   const currentUser = authState.type === "authenticated" ? authState.user : null;
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = !!currentUser && isAdminRole(currentUser.role);
 
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const designersQuery = useDesignersList();

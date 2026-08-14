@@ -8,11 +8,18 @@ import { Button } from "../components/Button";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
-import type { PendingUser, User } from "../lib/types";
+import { USER_ROLE_LABELS, type PendingUser, type User, type UserRole } from "../lib/types";
+
+const ROLE_BADGE_VARIANT: Record<UserRole, "brand" | "ok" | "accent"> = {
+  super_admin: "brand",
+  admin: "ok",
+  designer: "accent",
+};
 
 export const UsersPage: React.FC = () => {
   const { authState } = useAuth();
-  const currentUserId = authState.type === "authenticated" ? authState.user.id : null;
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
+  const isSuperAdmin = currentUser?.role === "super_admin";
 
   const listQuery = useUsersList();
   const pendingQuery = usePendingUsersList();
@@ -25,7 +32,7 @@ export const UsersPage: React.FC = () => {
   const users = listQuery.data ?? [];
   const pendingUsers = pendingQuery.data ?? [];
 
-  const handleApprove = (pending: PendingUser, role: "admin" | "designer") => {
+  const handleApprove = (pending: PendingUser, role: UserRole) => {
     approveMutation.mutate(
       { id: pending.id, email: pending.email, displayName: pending.displayName, role },
       {
@@ -51,11 +58,20 @@ export const UsersPage: React.FC = () => {
     });
   };
 
+  // A plain admin can only remove designer accounts; a super admin can
+  // remove anyone but themselves. Mirrors firestore.rules' users/{id} delete.
+  const canDelete = (u: User) =>
+    u.id !== currentUser?.id && (isSuperAdmin || u.role === "designer");
+
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-display text-3xl font-semibold text-ink">User Management</h1>
-        <p className="mt-1 text-[0.9375rem] text-faint-ink">Manage who can access Studio Leads</p>
+        <p className="mt-1 text-[0.9375rem] text-faint-ink">
+          {isSuperAdmin
+            ? "Manage who can access Studio Leads, including other admins."
+            : "Manage designer access to Studio Leads. Only a super admin can grant admin access."}
+        </p>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -96,14 +112,26 @@ export const UsersPage: React.FC = () => {
                         >
                           <Check size={14} /> Approve as Designer
                         </Button>
-                        <Button
-                          variant="soft"
-                          size="sm"
-                          disabled={approveMutation.isPending}
-                          onClick={() => handleApprove(p, "admin")}
-                        >
-                          <Check size={14} /> Approve as Admin
-                        </Button>
+                        {isSuperAdmin && (
+                          <>
+                            <Button
+                              variant="soft"
+                              size="sm"
+                              disabled={approveMutation.isPending}
+                              onClick={() => handleApprove(p, "admin")}
+                            >
+                              <Check size={14} /> Approve as Admin
+                            </Button>
+                            <Button
+                              variant="soft"
+                              size="sm"
+                              disabled={approveMutation.isPending}
+                              onClick={() => handleApprove(p, "super_admin")}
+                            >
+                              <Check size={14} /> Approve as Super Admin
+                            </Button>
+                          </>
+                        )}
                         <Button variant="ghost" size="sm" onClick={() => denyTarget.open(p)}>
                           <X size={14} /> Deny
                         </Button>
@@ -143,11 +171,11 @@ export const UsersPage: React.FC = () => {
                     <td className="border-b border-line px-4 py-3 text-ink">{u.displayName}</td>
                     <td className="border-b border-line px-4 py-3 text-ink">{u.email}</td>
                     <td className="border-b border-line px-4 py-3">
-                      <Badge variant={u.role === "admin" ? "brand" : "accent"}>{u.role}</Badge>
+                      <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{USER_ROLE_LABELS[u.role]}</Badge>
                     </td>
                     <td className="border-b border-line px-4 py-3 text-ink">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</td>
                     <td className="border-b border-line px-4 py-3">
-                      {u.id !== currentUserId && (
+                      {canDelete(u) && (
                         <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
                           <Trash2 size={16} />
                         </Button>

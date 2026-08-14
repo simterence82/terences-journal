@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
-import type { AttendanceRecord, AttendanceStatus } from "../lib/types";
+import { isAdminRole, type AttendanceReason, type AttendanceRecord, type AttendanceStatus, type Viewer } from "../lib/types";
 
 const COLLECTION = "attendance";
 
@@ -13,6 +13,7 @@ function toAttendance(id: string, data: Record<string, any>): AttendanceRecord {
     designerName: data.designerName,
     date: data.date,
     status: data.status,
+    reason: data.reason ?? null,
     notes: data.notes ?? null,
     markedBy: data.markedBy ?? null,
     markedAt: toIso(data.markedAt),
@@ -20,18 +21,18 @@ function toAttendance(id: string, data: Record<string, any>): AttendanceRecord {
 }
 
 /**
- * Admins see every record; a designer's own query is constrained with
- * where("designerId", "==", uid), matching firestore.rules' list check.
+ * Either admin tier sees every record; a designer's own query is
+ * constrained with where("designerId", "==", uid), matching
+ * firestore.rules' list check.
  */
-export const useAttendanceList = (viewer: { id: string; role: "admin" | "designer" } | null) =>
+export const useAttendanceList = (viewer: Viewer | null) =>
   useQuery({
-    queryKey: ["attendance", viewer?.role === "admin" ? "all" : viewer?.id],
+    queryKey: ["attendance", viewer && isAdminRole(viewer.role) ? "all" : viewer?.id],
     enabled: !!viewer,
     queryFn: async () => {
-      const q =
-        viewer!.role === "admin"
-          ? collection(db, COLLECTION)
-          : query(collection(db, COLLECTION), where("designerId", "==", viewer!.id));
+      const q = isAdminRole(viewer!.role)
+        ? collection(db, COLLECTION)
+        : query(collection(db, COLLECTION), where("designerId", "==", viewer!.id));
       const snap = await getDocs(q);
       const items = snap.docs.map((d) => toAttendance(d.id, d.data()));
       items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
@@ -44,6 +45,7 @@ export interface MarkAttendanceInput {
   designerName: string;
   date: string;
   status: AttendanceStatus;
+  reason: AttendanceReason | null;
   notes: string | null;
 }
 
@@ -58,6 +60,7 @@ export const useMarkAttendance = () => {
         designerName: input.designerName,
         date: input.date,
         status: input.status,
+        reason: input.status === "present" ? null : input.reason,
         notes: input.notes,
         markedBy: auth.currentUser?.uid ?? null,
         markedAt: serverTimestamp(),

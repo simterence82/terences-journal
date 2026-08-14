@@ -6,6 +6,7 @@ import { useDesignersList } from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
 import { formatSGD } from "../lib/formatCurrency";
 import { computeDesignerKpi, gradeForScore, KPI_PERIOD_LABELS, KPI_WEIGHTS, SLA_RESPONSE_HOURS, type KpiPeriod, type DesignerKpi } from "../lib/kpi";
+import { isAdminRole } from "../lib/types";
 import { Tabs } from "../components/Tabs";
 import { Badge } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
@@ -18,7 +19,7 @@ function pct(value: number | null): string {
 export const KpiPage: React.FC = () => {
   const { authState } = useAuth();
   const currentUser = authState.type === "authenticated" ? authState.user : null;
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = !!currentUser && isAdminRole(currentUser.role);
 
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const attendanceQuery = useAttendanceList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);

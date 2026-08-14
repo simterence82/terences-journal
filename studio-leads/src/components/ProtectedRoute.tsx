@@ -2,7 +2,7 @@ import React from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../lib/AuthContext";
 import { AppShell } from "./AppShell";
-import type { UserRole } from "../lib/types";
+import { USER_ROLE_LABELS, type UserRole } from "../lib/types";
 
 interface ProtectedRouteProps {
   roles: UserRole[];
@@ -42,7 +42,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ roles, children 
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-2 bg-bg text-center">
         <h1 className="font-display text-xl font-semibold text-ink">Access Denied</h1>
-        <p className="text-sm text-faint-ink">Your role ({authState.user.role}) lacks the required permissions.</p>
+        <p className="text-sm text-faint-ink">Your role ({USER_ROLE_LABELS[authState.user.role]}) lacks the required permissions.</p>
       </div>
     );
   }

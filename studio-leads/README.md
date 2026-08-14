@@ -23,15 +23,21 @@ server of its own).
   `src/lib/kpi.ts`); the next-follow-up date on every open lead drives an
   overdue flag that surfaces on the Dashboard and Leads page.
 - **Attendance** — an admin marks each designer Present / Late / Half Day /
-  On Leave / Absent per day; designers see their own history (read-only).
+  On Leave / Absent per day, with a reason whenever they're not fully in
+  (Annual Leave, MC, Childcare Leave, Compassionate Leave, Unpaid Leave,
+  Off In Lieu, Unauthorized, Other) plus a free-text note. Designers see
+  their own history (read-only). A **Summary** tab rolls this up per
+  designer over a period — present/late/half-day/leave/absent counts, an
+  attendance rate, and a breakdown of leave reasons (e.g. "MC ×2, Annual
+  Leave ×3").
 - **KPI & Grading** — see "Grading model" below.
 - **Role-scoped visibility** — designers only ever see their own leads and
   attendance (enforced in `firestore.rules`, not just hidden in the UI);
-  admins see everything and are the only ones who can create/assign/delete
-  leads or mark attendance.
-- **User Management** (admin only) — the first person to open the app
-  bootstraps as admin; everyone else requests access and an admin approves
-  them as Admin or Designer.
+  admins and super admins see everything and are the ones who can
+  create/assign/delete leads or mark attendance.
+- **User Management** — three tiers (see "Roles" below). The first person
+  to open the app bootstraps as super admin; everyone else requests access
+  and an admin (or super admin) approves them.
 
 ## Grading model
 
@@ -101,9 +107,20 @@ cp .env.example .env
 npm run dev
 ```
 
-Open `http://localhost:5174` and create the first admin account — no
-Firebase users exist yet. Firestore collections are created automatically
-on first write.
+Open `http://localhost:5174` and create the first **super admin** account —
+no Firebase users exist yet. Firestore collections are created
+automatically on first write.
+
+### 4. About the typeface
+
+The brand asks for **Gotham**, but Gotham is a paid, licensed font (Hoefler
+& Co.) — it isn't available on Google Fonts and can't legally be linked
+from a CDN without owning it. `src/index.css` is wired up so that once the
+studio has Gotham's web font files, dropping them in `public/fonts/` and
+adding one `@font-face` block makes the whole app pick them up automatically
+(both `--font-display` and `--font-base` already look for a font literally
+named `"Gotham"` first). Until then, it falls back to **Montserrat** — a
+free, geometric sans that's the standard visual stand-in for Gotham.
 
 ## Deploying (GitHub → Firebase Hosting)
 
@@ -146,8 +163,16 @@ firebase deploy --only hosting,firestore:rules --project <your-project-id>
 
 ## Roles
 
+Three tiers, enforced in `firestore.rules` (not just hidden in the UI):
+
+- **Super Admin** — everything an Admin can do, plus the only tier that can
+  approve/create/edit/delete other **Admin** or **Super Admin** accounts.
+  The first account ever created (the one-time bootstrap) is always a
+  super admin, since no one else exists yet to grant access.
 - **Admin** — creates and assigns leads, reassigns/deletes leads, marks
-  attendance, approves/removes users, sees every designer's KPIs.
+  attendance, sees every designer's KPIs, and can approve/remove
+  **Designer** accounts — but cannot grant Admin or Super Admin access, or
+  edit/remove another Admin or Super Admin.
 - **Designer** — sees only their own assigned leads, logs follow-ups,
   updates status/quotation/next-follow-up-date/notes on their own leads,
   views their own attendance history and KPI. Cannot reassign or delete

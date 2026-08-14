@@ -4,7 +4,7 @@ import { AlertTriangle, CalendarClock, Handshake, TrendingUp } from "lucide-reac
 import { useLeadsList } from "../hooks/useLeads";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
-import { CLOSED_LEAD_STATUSES } from "../lib/types";
+import { CLOSED_LEAD_STATUSES, isAdminRole } from "../lib/types";
 import { SummaryCard } from "../components/SummaryCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
@@ -13,7 +13,7 @@ import { Skeleton } from "../components/Skeleton";
 export const DashboardPage: React.FC = () => {
   const { authState } = useAuth();
   const currentUser = authState.type === "authenticated" ? authState.user : null;
-  const isAdmin = currentUser?.role === "admin";
+  const isAdmin = !!currentUser && isAdminRole(currentUser.role);
 
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const leads = leadsQuery.data ?? [];

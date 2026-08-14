@@ -11,19 +11,37 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function myRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    // Three tiers, from narrowest to widest:
+    // - isExactlyAdmin(): the "admin" role only -- day-to-day operations
+    //   (leads, attendance, approving designer sign-ups), but cannot
+    //   create/edit/remove admin or super_admin accounts.
+    // - isSuperAdmin(): full control, including managing other admins.
+    // - isAdmin(): "admin OR super_admin" -- use this for anything both
+    //   tiers should be able to do (leads/attendance/follow-ups below).
+    function isExactlyAdmin() {
+      return isApproved() && myRole() == "admin";
+    }
+
+    function isSuperAdmin() {
+      return isApproved() && myRole() == "super_admin";
+    }
+
     function isAdmin() {
-      return isApproved() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      return isExactlyAdmin() || isSuperAdmin();
     }
 
     function isOwnDesigner(assignedTo) {
       return isApproved() && request.auth.uid == assignedTo;
     }
 
-    // Sentinel doc: its existence means an admin has already been
-    // bootstrapped. Readable by anyone (even signed out) so the login page
-    // can decide whether to show the first-run setup form. Created exactly
-    // once, atomically alongside the first admin's users/{uid} doc.
+    // Sentinel doc: its existence means the first super admin has already
+    // been bootstrapped. Readable by anyone (even signed out) so the login
+    // page can decide whether to show the first-run setup form. Created
+    // exactly once, atomically alongside the first user's users/{uid} doc.
     match /meta/setup {
       allow get: if true;
       allow create: if request.auth != null &&
@@ -33,25 +51,35 @@ service cloud.firestore {
     }
 
     // Existence of a users/{uid} doc IS "approved"; its role field
-    // ("admin" or "designer") is the permission level.
+    // ("super_admin" / "admin" / "designer") is the permission tier.
     match /users/{userId} {
       allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
-      // Two ways to create: (1) the very first user bootstraps themselves as
-      // admin, only while meta/setup doesn't exist yet; (2) an existing
-      // admin approves a pending request (or edits an existing user's role).
+      // Three ways to create: (1) the very first user bootstraps themselves
+      // as super_admin, only while meta/setup doesn't exist yet; (2) a
+      // super admin approves/creates a user of any role; (3) a plain admin
+      // approves a pending request, but only as a "designer" -- they can't
+      // grant admin/super_admin access.
       allow create: if request.auth != null &&
         ((request.auth.uid == userId &&
-          request.resource.data.role == "admin" &&
+          request.resource.data.role == "super_admin" &&
           !exists(/databases/$(database)/documents/meta/setup)) ||
-         isAdmin());
-      allow update: if isAdmin();
-      allow delete: if isAdmin() && request.auth.uid != userId;
+         isSuperAdmin() ||
+         (isExactlyAdmin() && request.resource.data.role == "designer"));
+      // A super admin can edit anyone. A plain admin can only edit designer
+      // docs, and can't use the edit to promote them out of "designer".
+      allow update: if isSuperAdmin() ||
+        (isExactlyAdmin() && resource.data.role == "designer" && request.resource.data.role == "designer");
+      // A super admin can remove admins/designers (never themselves). A
+      // plain admin can only remove designers.
+      allow delete: if (isSuperAdmin() && request.auth.uid != userId) ||
+        (isExactlyAdmin() && resource.data.role == "designer");
     }
 
-    // A user writes their own pending request at sign-up time; only admins
-    // can see the queue and approve (delete + create users/{uid}) or deny
-    // (delete only).
+    // A user writes their own pending request at sign-up time; any admin
+    // tier can see the queue and approve (delete + create users/{uid}) or
+    // deny (delete only) -- the users/{userId} create rule above is what
+    // actually stops a plain admin from approving someone as admin.
     match /pendingUsers/{userId} {
       allow get, list: if isAdmin();
       allow create: if request.auth != null && request.auth.uid == userId;
@@ -59,7 +87,7 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // Only admins assign/create/delete leads (they're the ones handing
+    // Both admin tiers assign/create/delete leads (they're the ones handing
     // leads to designers). A designer can read and update their own
     // assigned leads (status, quotation, follow-up date, notes) but can't
     // reassign, edit client identity fields, or delete. Every read must be
@@ -78,9 +106,9 @@ service cloud.firestore {
     }
 
     // A follow-up belongs to exactly one lead; visibility mirrors that
-    // lead's assignedTo. Admins can read/create/update/delete any; the
-    // assigned designer can read and create (log a follow-up) but not
-    // edit/delete history after the fact.
+    // lead's assignedTo. Either admin tier can read/create/update/delete
+    // any; the assigned designer can read and create (log a follow-up) but
+    // not edit/delete history after the fact.
     match /leadFollowUps/{id} {
       allow get: if isAdmin() ||
         isOwnDesigner(get(/databases/$(database)/documents/leads/$(resource.data.leadId)).data.assignedTo);
@@ -91,8 +119,8 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Only admins mark attendance (product decision: admin-marked, not
-    // self-check-in). Designers can read only their own history.
+    // Either admin tier marks attendance (product decision: admin-marked,
+    // not self-check-in). Designers can read only their own history.
     match /attendance/{id} {
       allow get: if isAdmin() || isOwnDesigner(resource.data.designerId);
       allow list: if isAdmin() || isOwnDesigner(resource.data.designerId);
