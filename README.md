@@ -162,10 +162,9 @@ required.
      of `firebase-service-account.json` from step 1.5 (this one **is**
      sensitive — it's only used by the scheduled purge workflow, never
      shipped to the browser).
-3. Push to the branch `.github/workflows/deploy.yml` watches (currently
-   `claude/radio-check-b670z5`) — this builds the app and publishes `dist/`
-   to Pages automatically. You'll get a URL like
-   `https://<your-github-username>.github.io/terences-journal/`.
+3. Push to `master` (which `.github/workflows/deploy.yml` watches) — this
+   builds the app and publishes `dist/` to Pages automatically. You'll get
+   a URL like `https://<your-github-username>.github.io/terences-journal/`.
 4. **Firebase Console → Authentication → Settings → Authorized domains →
    Add domain** → paste your `github.io` URL, or Firebase Auth will refuse
    to sign anyone in from it.
