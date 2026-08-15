@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { Handshake } from "lucide-react";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc, writeBatch } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
@@ -79,11 +78,20 @@ export const LoginPage: React.FC = () => {
       <div className="w-full max-w-md overflow-hidden rounded-xl border border-line bg-panel shadow-lg">
         <div className="h-1.5 w-full bg-brand" />
         <div className="p-6 sm:p-8">
+          {/* Text wordmark standing in for the real Form & Space logo file --
+              drop an actual logo image (e.g. public/images/logo.svg) and
+              swap this <span> monogram + label for an <img> once it's
+              available; nothing else on this page needs to change. */}
           <div className="mb-2 flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-brand-ink">
-              <Handshake size={20} />
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand text-brand-ink">
+              <span className="font-display text-base font-bold tracking-tight">F&amp;S</span>
             </span>
-            <h1 className="font-display text-2xl font-semibold text-ink">Studio Leads</h1>
+            <div className="flex flex-col leading-tight">
+              <span className="font-display text-[0.6875rem] font-semibold uppercase tracking-[0.2em] text-faint-ink">
+                Form &amp; Space
+              </span>
+              <h1 className="font-display text-2xl font-semibold text-ink">Studio Leads</h1>
+            </div>
           </div>
 
           {setupCheckError ? (
