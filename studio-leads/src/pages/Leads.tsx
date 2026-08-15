@@ -595,7 +595,7 @@ const LeadFullDetailDialog: React.FC<{
             <label className="flex items-center gap-2 font-medium text-ink">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-line accent-[var(--ok)]"
+                className="h-4 w-4 rounded border-line accent-[var(--ok-light)]"
                 checked={status === "signed"}
                 onChange={(e) => setStatus(e.target.checked ? "signed" : "follow_up")}
               />
@@ -604,7 +604,7 @@ const LeadFullDetailDialog: React.FC<{
             <label className="flex items-center gap-2 font-medium text-ink">
               <input
                 type="checkbox"
-                className="h-4 w-4 rounded border-line accent-[var(--bad)]"
+                className="h-4 w-4 rounded border-line accent-[var(--bad-light)]"
                 checked={status === "rejected"}
                 onChange={(e) => setStatus(e.target.checked ? "rejected" : "follow_up")}
               />
@@ -644,7 +644,7 @@ const LeadFullDetailDialog: React.FC<{
                 <label className="flex items-center gap-2 font-medium text-ink">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-line accent-[var(--ok)]"
+                    className="h-4 w-4 rounded border-line accent-[var(--ok-light)]"
                     checked={gstApplicable === true}
                     onChange={(e) => setGstApplicable(e.target.checked ? true : null)}
                   />
@@ -653,7 +653,7 @@ const LeadFullDetailDialog: React.FC<{
                 <label className="flex items-center gap-2 font-medium text-ink">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-line accent-[var(--bad)]"
+                    className="h-4 w-4 rounded border-line accent-[var(--bad-light)]"
                     checked={gstApplicable === false}
                     onChange={(e) => setGstApplicable(e.target.checked ? false : null)}
                   />

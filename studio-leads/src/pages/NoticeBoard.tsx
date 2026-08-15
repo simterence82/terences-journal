@@ -168,7 +168,7 @@ export const NoticeBoardPage: React.FC = () => {
           <label className="flex items-center gap-2 text-[0.8125rem] font-medium text-ink">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-line accent-[var(--brand)]"
+              className="h-4 w-4 rounded border-line accent-[var(--brand-light)]"
               checked={form.pinned}
               onChange={(e) => setForm((p) => ({ ...p, pinned: e.target.checked }))}
             />
@@ -198,7 +198,7 @@ export const NoticeBoardPage: React.FC = () => {
           <label className="flex items-center gap-2 text-[0.8125rem] font-medium text-ink">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-line accent-[var(--brand)]"
+              className="h-4 w-4 rounded border-line accent-[var(--brand-light)]"
               checked={editForm.pinned}
               onChange={(e) => setEditForm((p) => ({ ...p, pinned: e.target.checked }))}
             />

@@ -54,6 +54,13 @@
   --bad-wash: #a5382a1c;
   --warn-wash: #a9793a22;
 
+  /* Lighter tints of --brand/--ok/--bad, used for checkbox accent-color
+     so checkboxes read softer than the solid badge/button versions of
+     these colors. */
+  --brand-light: #8bb3a3;
+  --ok-light: #86c7a1;
+  --bad-light: #e29a8c;
+
   --font-display: 'Gotham', 'Montserrat', system-ui, sans-serif;
   --font-base: 'Gotham', 'Montserrat', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', monospace;
@@ -98,6 +105,13 @@
   --ok-wash: #6fbb8c2e;
   --bad-wash: #e082682e;
   --warn-wash: #d6a35c2e;
+
+  /* Lighter tints of --brand/--ok/--bad, used for checkbox accent-color
+     so checkboxes read softer than the solid badge/button versions of
+     these colors. */
+  --brand-light: #a4c7ba;
+  --ok-light: #a2d9bb;
+  --bad-light: #edb2a0;
 
   --font-display: 'Gotham', 'Montserrat', system-ui, sans-serif;
   --font-base: 'Gotham', 'Montserrat', system-ui, sans-serif;
