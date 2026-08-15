@@ -134,5 +134,13 @@ service cloud.firestore {
       allow get, list: if isApproved();
       allow create, update, delete: if isAdmin();
     }
+
+    // Showroom tracking (stock, aircon servicing, faulty reports, new
+    // materials): admin-tier only, both to view and to manage -- designers
+    // don't need this, so unlike leads/attendance there's no scoped
+    // designer-read case here at all.
+    match /showroomItems/{id} {
+      allow get, list, create, update, delete: if isAdmin();
+    }
   }
 }

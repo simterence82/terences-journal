@@ -6,6 +6,7 @@ import { LeadsPage } from "./pages/Leads";
 import { AttendancePage } from "./pages/Attendance";
 import { KpiPage } from "./pages/Kpi";
 import { NoticeBoardPage } from "./pages/NoticeBoard";
+import { ShowroomPage } from "./pages/Showroom";
 import { UsersPage } from "./pages/Users";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -51,6 +52,14 @@ export const App: React.FC = () => (
       element={
         <ProtectedRoute roles={[...EVERYONE]}>
           <NoticeBoardPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/showroom"
+      element={
+        <ProtectedRoute roles={["super_admin", "admin"]}>
+          <ShowroomPage />
         </ProtectedRoute>
       }
     />

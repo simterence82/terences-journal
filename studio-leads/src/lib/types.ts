@@ -171,3 +171,55 @@ export interface Announcement {
   createdAt: string;
   updatedAt: string | null;
 }
+
+// Showroom tracking (admin/super admin only): stock, equipment, and
+// issues in the physical showroom -- drinks/pantry running low, aircon
+// servicing due, something reported faulty, new materials that came in.
+export const SHOWROOM_CATEGORIES = [
+  "pantry_drinks",
+  "pantry_supplies",
+  "aircon_servicing",
+  "faulty_report",
+  "new_materials",
+  "other",
+] as const;
+export type ShowroomCategory = (typeof SHOWROOM_CATEGORIES)[number];
+
+export const SHOWROOM_CATEGORY_LABELS: Record<ShowroomCategory, string> = {
+  pantry_drinks: "Drinks",
+  pantry_supplies: "Pantry Supplies",
+  aircon_servicing: "Aircon & Servicing",
+  faulty_report: "Faulty / Report Issue",
+  new_materials: "New Materials",
+  other: "Other",
+};
+
+export const SHOWROOM_STATUSES = ["ok", "low_stock", "needs_attention", "faulty", "servicing_scheduled", "resolved"] as const;
+export type ShowroomStatus = (typeof SHOWROOM_STATUSES)[number];
+
+export const SHOWROOM_STATUS_LABELS: Record<ShowroomStatus, string> = {
+  ok: "OK",
+  low_stock: "Low Stock",
+  needs_attention: "Needs Attention",
+  faulty: "Faulty",
+  servicing_scheduled: "Servicing Scheduled",
+  resolved: "Resolved",
+};
+
+// Statuses that mean "this still needs someone to do something about it".
+export const OPEN_SHOWROOM_STATUSES: ShowroomStatus[] = ["low_stock", "needs_attention", "faulty", "servicing_scheduled"];
+export const CLOSED_SHOWROOM_STATUSES: ShowroomStatus[] = ["ok", "resolved"];
+
+export interface ShowroomItem {
+  id: string;
+  category: ShowroomCategory;
+  title: string;
+  description: string | null;
+  status: ShowroomStatus;
+  notes: string | null;
+  reportedBy: string | null;
+  reportedByName: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  resolvedAt: string | null;
+}
