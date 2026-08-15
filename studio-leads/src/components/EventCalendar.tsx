@@ -94,15 +94,15 @@ export const EventCalendar: React.FC<EventCalendarProps> = ({ events, emptyHint 
                   type="button"
                   disabled={dayEvents.length === 0}
                   onClick={() => setDialogDate(dateStr)}
-                  className={`flex h-16 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition-colors ${
+                  className={`flex h-16 w-full min-w-0 flex-col items-start gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-colors ${
                     dayEvents.length > 0 ? "cursor-pointer hover:bg-faint" : "cursor-default"
                   } ${isToday ? "border-brand" : "border-line"}`}
                 >
                   <span className={`text-xs ${isToday ? "font-semibold text-brand" : "text-faint-ink"}`}>{dayNum}</span>
                   {dayEvents.length > 0 && (
-                    <span className="flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-accent" />
-                      <span className="truncate text-[0.6875rem] text-ink">
+                    <span className="flex w-full min-w-0 items-center gap-1">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />
+                      <span className="min-w-0 flex-1 truncate text-[0.6875rem] text-ink">
                         {dayEvents.length === 1 ? dayEvents[0].title : `${dayEvents.length} scheduled`}
                       </span>
                     </span>

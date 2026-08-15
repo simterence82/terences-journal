@@ -317,15 +317,15 @@ export const AttendancePage: React.FC = () => {
                           key={dateStr}
                           type="button"
                           onClick={() => setCalendarDialogDate(dateStr)}
-                          className={`flex h-16 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition-colors hover:bg-faint ${
+                          className={`flex h-16 w-full min-w-0 flex-col items-start gap-1 overflow-hidden rounded-lg border p-1.5 text-left transition-colors hover:bg-faint ${
                             isToday ? "border-brand" : "border-line"
                           }`}
                         >
                           <span className={`text-xs ${isToday ? "font-semibold text-brand" : "text-faint-ink"}`}>{dayNum}</span>
                           {record && (
-                            <span className="flex items-center gap-1">
-                              <span className={`h-2 w-2 rounded-full ${STATUS_DOT_CLASS[record.status]}`} />
-                              <span className="truncate text-[0.6875rem] text-ink">{ATTENDANCE_STATUS_LABELS[record.status]}</span>
+                            <span className="flex w-full min-w-0 items-center gap-1">
+                              <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_CLASS[record.status]}`} />
+                              <span className="min-w-0 flex-1 truncate text-[0.6875rem] text-ink">{ATTENDANCE_STATUS_LABELS[record.status]}</span>
                             </span>
                           )}
                         </button>

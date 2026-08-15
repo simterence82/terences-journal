@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Phone, Mail, MapPin, AlertTriangle, Handshake, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useLeadsList, useCreateLead, useUpdateLead, useDeleteLead, useClaimLead } from "../hooks/useLeads";
@@ -70,10 +71,29 @@ export const LeadsPage: React.FC = () => {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(EMPTY_ADD_FORM);
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const leads = leadsQuery.data ?? [];
   const designers = designersQuery.data ?? [];
   const today = todayDateString();
+
+  // Deep link from elsewhere (e.g. Dashboard's Needs Attention table) --
+  // /leads?lead=<id> opens that lead's detail dialog directly, then the
+  // param is dropped so it doesn't reopen on a later visit.
+  useEffect(() => {
+    const leadId = searchParams.get("lead");
+    if (leadId && leads.some((l) => l.id === leadId)) {
+      setSelectedLeadId(leadId);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("lead");
+          return next;
+        },
+        { replace: true }
+      );
+    }
+  }, [searchParams, leads, setSearchParams]);
 
   const filteredByDesigner =
     designerFilter === "all"

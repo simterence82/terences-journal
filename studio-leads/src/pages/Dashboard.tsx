@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle, CalendarCheck, CalendarClock, Check, Handshake, Megaphone, TrendingUp, X as XIcon } from "lucide-react";
 import { useLeadsList } from "../hooks/useLeads";
@@ -19,6 +19,7 @@ import { LeaveCalendar } from "../components/LeaveCalendar";
 import { EventCalendar } from "../components/EventCalendar";
 
 export const DashboardPage: React.FC = () => {
+  const navigate = useNavigate();
   const { authState } = useAuth();
   const currentUser = authState.type === "authenticated" ? authState.user : null;
   const isAdmin = !!currentUser && isAdminRole(currentUser.role);
@@ -149,7 +150,7 @@ export const DashboardPage: React.FC = () => {
                 {attention.map((l) => {
                   const isOverdue = l.nextFollowUpDate! < today;
                   return (
-                    <tr key={l.id} className="hover:bg-surface">
+                    <tr key={l.id} className="cursor-pointer hover:bg-surface" onClick={() => navigate(`/leads?lead=${l.id}`)}>
                       <td className="border-b border-line px-4 py-3 text-ink">{l.clientName}</td>
                       <td className="border-b border-line px-4 py-3 text-faint-ink">{l.assignedToName ?? "—"}</td>
                       <td className="border-b border-line px-4 py-3">
