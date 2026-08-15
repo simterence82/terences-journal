@@ -1,0 +1,34 @@
+rules_version = '2';
+
+// Cloud Storage rules for the Files Archive (MC scans/photos today,
+// possibly other leave-related documents later). Mirrors firestore.rules'
+// tiers using firestore.get()/firestore.exists() to check the same
+// users/{uid} doc -- there's no separate storage-only auth model here.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isApproved() {
+      return request.auth != null &&
+        firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function myRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isApproved() && (myRole() == "admin" || myRole() == "super_admin");
+    }
+
+    // Every uploaded file lives under the uploader's own uid folder --
+    // a designer can only write into their own, an admin (marking a
+    // designer's MC on their behalf) can write into anyone's. Reads are
+    // the same tier as attendance itself: the uploader or either admin
+    // tier, not every approved user, since these can be medical documents.
+    match /attendanceFiles/{uid}/{fileName} {
+      allow read: if isApproved() && (request.auth.uid == uid || isAdmin());
+      allow write: if isApproved() && (request.auth.uid == uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+  }
+}

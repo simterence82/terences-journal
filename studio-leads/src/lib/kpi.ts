@@ -127,10 +127,12 @@ export function computeDesignerKpi(
   const conversionRate = signed.length + rejected.length > 0 ? (signed.length / (signed.length + rejected.length)) * 100 : null;
   const signedValue = signed.reduce((sum, l) => sum + (l.quotationAmount ?? 0), 0);
 
-  // Attendance: present/late/half-day count toward showing up; leave is
-  // excluded (approved absence shouldn't count against commitment);
-  // unexplained absence drags the score down.
-  const attendanceInPeriod = attendance.filter((a) => isDateStringWithinPeriod(a.date, period, now) && a.status !== "leave");
+  // Attendance: present/late/half-day count toward showing up; leave and
+  // MC are excluded (documented absence shouldn't count against
+  // commitment); unexplained absence drags the score down.
+  const attendanceInPeriod = attendance.filter(
+    (a) => isDateStringWithinPeriod(a.date, period, now) && a.status !== "leave" && a.status !== "mc"
+  );
   const attendanceScoreSum = attendanceInPeriod.reduce((sum, a) => {
     if (a.status === "present") return sum + 1;
     if (a.status === "late" || a.status === "half_day") return sum + 0.5;

@@ -20,6 +20,7 @@ export interface DesignerAttendanceSummary {
   lateDays: number;
   halfDays: number;
   leaveDays: number;
+  mcDays: number;
   absentDays: number;
   totalMarkedDays: number;
   /** Same formula as kpi.ts's attendance signal: present=1, late/half=0.5, absent=0, leave excluded. */
@@ -41,9 +42,10 @@ export function summarizeAttendance(
   const lateDays = inPeriod.filter((r) => r.status === "late").length;
   const halfDays = inPeriod.filter((r) => r.status === "half_day").length;
   const leaveDays = inPeriod.filter((r) => r.status === "leave").length;
+  const mcDays = inPeriod.filter((r) => r.status === "mc").length;
   const absentDays = inPeriod.filter((r) => r.status === "absent").length;
 
-  const scored = inPeriod.filter((r) => r.status !== "leave");
+  const scored = inPeriod.filter((r) => r.status !== "leave" && r.status !== "mc");
   const scoreSum = scored.reduce((sum, r) => {
     if (r.status === "present") return sum + 1;
     if (r.status === "late" || r.status === "half_day") return sum + 0.5;
@@ -64,6 +66,7 @@ export function summarizeAttendance(
     lateDays,
     halfDays,
     leaveDays,
+    mcDays,
     absentDays,
     totalMarkedDays: inPeriod.length,
     attendanceRate,

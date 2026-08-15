@@ -18,6 +18,7 @@ function toAttendance(id: string, data: Record<string, any>): AttendanceRecord {
     markedBy: data.markedBy ?? null,
     markedAt: toIso(data.markedAt),
     leaveApproval: data.leaveApproval ?? null,
+    mcFileId: data.mcFileId ?? null,
   };
 }
 
@@ -71,6 +72,8 @@ export interface MarkAttendanceInput {
   /** "approved" when an admin marks directly; "pending" when a designer
       self-applies (see Attendance.tsx) -- null for non-"leave" statuses. */
   leaveApproval: LeaveApprovalStatus | null;
+  /** Only meaningful for status "mc" -- see useFiles.ts. */
+  mcFileId?: string | null;
 }
 
 /**
@@ -94,6 +97,7 @@ export const useMarkAttendance = () => {
         reason: input.status === "present" ? null : input.reason,
         notes: input.notes,
         leaveApproval: input.leaveApproval,
+        mcFileId: input.mcFileId ?? null,
         markedBy: auth.currentUser?.uid ?? null,
         markedAt: serverTimestamp(),
       });

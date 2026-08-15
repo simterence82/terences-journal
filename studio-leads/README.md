@@ -23,13 +23,19 @@ server of its own).
   `src/lib/kpi.ts`); the next-follow-up date on every open lead drives an
   overdue flag that surfaces on the Dashboard and Leads page.
 - **Attendance** — an admin marks each designer Present / Late / Half Day /
-  On Leave / Absent per day, with a reason whenever they're not fully in
-  (Annual Leave, MC, Childcare Leave, Compassionate Leave, Unpaid Leave,
-  Off In Lieu, Unauthorized, Other) plus a free-text note. Designers see
-  their own history (read-only). A **Summary** tab rolls this up per
-  designer over a period — present/late/half-day/leave/absent counts, an
+  On Leave / MC / Absent per day, with a reason whenever they're not fully
+  in (Annual Leave, Childcare Leave, Compassionate Leave, Unpaid Leave, Off
+  In Lieu, Unauthorized, Other) plus a free-text note. A "Mark All Present"
+  button handles the common case in one click instead of setting each
+  designer individually. Designers apply for their own leave, or submit an
+  MC directly (no approval needed for MC -- it's on record right away,
+  backed by an uploaded document). A **Summary** tab rolls this up per
+  designer over a period — present/late/half-day/leave/MC/absent counts, an
   attendance rate, and a breakdown of leave reasons (e.g. "MC ×2, Annual
   Leave ×3").
+- **Files Archive** — MC scans/photos (PDF, JPEG, PNG, or straight from a
+  phone's camera) uploaded through Attendance land here, organized by
+  category, backed by Cloud Storage.
 - **KPI & Grading** — see "Grading model" below.
 - **Role-scoped visibility** — designers only ever see their own leads and
   attendance (enforced in `firestore.rules`, not just hidden in the UI);
@@ -73,10 +79,19 @@ a conversation, not an automatic verdict.
 ## Tech stack
 
 React 18 + Vite + TypeScript + Tailwind CSS. Firebase Authentication +
-Cloud Firestore called directly from the browser (no backend server of its
-own). TanStack React Query for data fetching. `react-router-dom`'s
-`BrowserRouter` for clean URLs (Firebase Hosting rewrites every path to
-`index.html`, so client-side routing works without a hash prefix).
+Cloud Firestore + Cloud Storage (for the Files Archive) called directly
+from the browser (no backend server of its own). TanStack React Query for
+data fetching. `react-router-dom`'s `BrowserRouter` for clean URLs
+(Firebase Hosting rewrites every path to `index.html`, so client-side
+routing works without a hash prefix).
+
+**A privacy note on the Files Archive:** Cloud Storage's `getDownloadURL()`
+returns a link with an access token baked in, which works regardless of
+who's holding it -- Storage's own security rules (`storage.rules`) govern
+who can generate that link in the first place and who can browse the file
+list, but the link itself, once obtained, isn't further access-controlled.
+Treat it the way you'd treat any studio-internal document link: fine to
+open from inside the app, not something to paste into a public channel.
 
 ## Getting started
 
@@ -97,7 +112,17 @@ own). TanStack React Query for data fetching. `react-router-dom`'s
 **Build → Firestore Database → Rules** → paste in `firestore.rules` from
 this folder → **Publish**.
 
-### 3. Run locally
+### 3. Enable Cloud Storage + publish its rules
+
+The Files Archive (MC uploads from Attendance) stores the actual files in
+Cloud Storage, not Firestore. **Build → Storage → Get started** → follow
+the prompts to provision the default bucket (this may require the project
+be on the pay-as-you-go **Blaze** plan — Storage's free tier is generous
+for a small studio's use, but the plan itself needs enabling). Then
+**Storage → Rules** → paste in `storage.rules` from this folder →
+**Publish**.
+
+### 4. Run locally
 
 ```bash
 cd studio-leads
@@ -111,7 +136,7 @@ Open `http://localhost:5174` and create the first **super admin** account —
 no Firebase users exist yet. Firestore collections are created
 automatically on first write.
 
-### 4. About the typeface
+### 5. About the typeface
 
 The brand asks for **Gotham**, but Gotham is a paid, licensed font (Hoefler
 & Co.) — it isn't available on Google Fonts and can't legally be linked
@@ -158,7 +183,7 @@ npm install -g firebase-tools
 firebase login
 cd studio-leads
 npm run build
-firebase deploy --only hosting,firestore:rules --project <your-project-id>
+firebase deploy --only hosting,firestore:rules,storage --project <your-project-id>
 ```
 
 ## Roles

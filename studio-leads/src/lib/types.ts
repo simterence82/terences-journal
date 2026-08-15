@@ -131,7 +131,7 @@ export interface FollowUp {
   loggedAt: string;
 }
 
-export const ATTENDANCE_STATUSES = ["present", "late", "half_day", "leave", "absent"] as const;
+export const ATTENDANCE_STATUSES = ["present", "late", "half_day", "leave", "mc", "absent"] as const;
 export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number];
 
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
@@ -139,6 +139,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
   late: "Late",
   half_day: "Half Day",
   leave: "On Leave",
+  mc: "MC",
   absent: "Absent",
 };
 
@@ -200,6 +201,38 @@ export interface AttendanceRecord {
   markedBy: string | null;
   markedAt: string | null;
   leaveApproval: LeaveApprovalStatus | null;
+  // Only meaningful for status "mc" -- the id of the matching doc in the
+  // "files" collection (the uploaded MC scan/photo). See useFiles.ts.
+  mcFileId: string | null;
+}
+
+// Where an uploaded file lives in the Files Archive. Only "medical
+// certificate" is actually produced by any flow today (marking a day
+// "mc"); the other two exist so the archive isn't a dead end once other
+// document types (e.g. supporting docs for a leave application) start
+// getting attached.
+export const FILE_CATEGORIES = ["medical_certificate", "leave_document", "other"] as const;
+export type FileCategory = (typeof FILE_CATEGORIES)[number];
+
+export const FILE_CATEGORY_LABELS: Record<FileCategory, string> = {
+  medical_certificate: "Medical Certificates (MC)",
+  leave_document: "Leave Supporting Documents",
+  other: "Other",
+};
+
+export interface ArchivedFile {
+  id: string;
+  category: FileCategory;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  storagePath: string;
+  downloadURL: string;
+  uploadedBy: string | null;
+  uploadedByName: string | null;
+  /** The attendance doc this file backs up, e.g. "{designerId}_{date}" -- null if unrelated. */
+  relatedAttendanceId: string | null;
+  createdAt: string;
 }
 
 export interface Announcement {

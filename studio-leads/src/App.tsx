@@ -7,6 +7,7 @@ import { AttendancePage } from "./pages/Attendance";
 import { KpiPage } from "./pages/Kpi";
 import { NoticeBoardPage } from "./pages/NoticeBoard";
 import { ShowroomPage } from "./pages/Showroom";
+import { FilesArchivePage } from "./pages/FilesArchive";
 import { UsersPage } from "./pages/Users";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -60,6 +61,14 @@ export const App: React.FC = () => (
       element={
         <ProtectedRoute roles={[...EVERYONE]}>
           <ShowroomPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/files"
+      element={
+        <ProtectedRoute roles={[...EVERYONE]}>
+          <FilesArchivePage />
         </ProtectedRoute>
       }
     />

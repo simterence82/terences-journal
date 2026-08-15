@@ -135,16 +135,18 @@ service cloud.firestore {
     // visible this way -- a designer's own pending/rejected application
     // stays visible only to themselves and admins until acted on.
     //
-    // A designer's only write is applying for their own leave: create-only
-    // (never update -- so they can't silently overwrite a day an admin
-    // already recorded, and can't approve their own request), only with
-    // status == "leave" -- see useAttendance.ts. Only admins can update a
-    // record afterwards, which is also how leaveApproval gets set.
+    // A designer's only write is applying for their own leave or MC:
+    // create-only (never update -- so they can't silently overwrite a day
+    // an admin already recorded, and can't approve their own leave), only
+    // with status == "leave" or "mc" -- see useAttendance.ts. Only admins
+    // can update a record afterwards, which is also how leaveApproval
+    // gets set.
     match /attendance/{id} {
       allow get: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave" && resource.data.leaveApproval == "approved");
       allow list: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave" && resource.data.leaveApproval == "approved");
       allow create: if isAdmin() ||
-        (isApproved() && request.resource.data.designerId == request.auth.uid && request.resource.data.status == "leave");
+        (isApproved() && request.resource.data.designerId == request.auth.uid &&
+         (request.resource.data.status == "leave" || request.resource.data.status == "mc"));
       allow update: if isAdmin();
       allow delete: if isAdmin();
     }
@@ -169,6 +171,19 @@ service cloud.firestore {
         (isApproved() &&
          request.resource.data.status == "resolved" &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "resolvedAt", "updatedAt"]));
+      allow delete: if isAdmin();
+    }
+
+    // Files Archive metadata (the actual bytes live in Cloud Storage, see
+    // storage.rules -- this is just what powers listing/filtering by
+    // category). Same visibility tier as attendance itself, since most of
+    // what lands here today is MC scans: the uploader or either admin
+    // tier, not every approved user.
+    match /files/{id} {
+      allow get: if isAdmin() || isOwnDesigner(resource.data.uploadedBy);
+      allow list: if isAdmin() || isOwnDesigner(resource.data.uploadedBy);
+      allow create: if isApproved() && request.resource.data.uploadedBy == request.auth.uid;
+      allow update: if false;
       allow delete: if isAdmin();
     }
   }

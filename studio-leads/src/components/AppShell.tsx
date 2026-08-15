@@ -7,6 +7,7 @@ import {
   Trophy,
   Megaphone,
   Store,
+  Archive,
   Users as UsersIcon,
   LogOut,
   Sun,
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { to: "/kpi", label: "KPI & Grading", icon: Trophy, end: false, adminOnly: true },
   { to: "/notice-board", label: "Notice Board", icon: Megaphone, end: false, adminOnly: false },
   { to: "/showroom", label: "Showroom", icon: Store, end: false, adminOnly: false },
+  { to: "/files", label: "Files Archive", icon: Archive, end: false, adminOnly: false },
   { to: "/users", label: "Users", icon: UsersIcon, end: false, adminOnly: true },
 ] as const;
 
