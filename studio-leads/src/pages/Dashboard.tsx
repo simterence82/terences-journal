@@ -4,9 +4,10 @@ import { AlertTriangle, CalendarClock, Handshake, Megaphone, TrendingUp } from "
 import { useLeadsList } from "../hooks/useLeads";
 import { useAnnouncementsList } from "../hooks/useAnnouncements";
 import { useLeaveCalendarList } from "../hooks/useAttendance";
+import { useShowroomItemsList } from "../hooks/useShowroom";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
-import { CLOSED_LEAD_STATUSES, isAdminRole } from "../lib/types";
+import { CLOSED_LEAD_STATUSES, SHOWROOM_STATUS_LABELS, isAdminRole } from "../lib/types";
 import { SummaryCard } from "../components/SummaryCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { Badge } from "../components/Badge";
@@ -23,17 +24,32 @@ export const DashboardPage: React.FC = () => {
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const announcementsQuery = useAnnouncementsList();
   const leaveCalendarQuery = useLeaveCalendarList();
+  const showroomQuery = useShowroomItemsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const leads = leadsQuery.data ?? [];
   const allAnnouncements = announcementsQuery.data ?? [];
   const announcements = allAnnouncements.slice(0, 3);
-  const eventAnnouncements = useMemo(
-    () =>
-      allAnnouncements
+  const showroomItems = showroomQuery.data ?? [];
+  const today = todayDateString();
+
+  // Every announcement with an event date, plus every Aircon & Servicing
+  // item (scheduled or still open) -- same event shape the Showroom page's
+  // own calendar uses, so what shows there also shows here for everyone.
+  const dashboardEvents = useMemo(
+    () => [
+      ...allAnnouncements
         .filter((a) => a.eventDate)
         .map((a) => ({ id: a.id, date: a.eventDate!, title: a.title, time: a.eventTime })),
-    [allAnnouncements]
+      ...showroomItems
+        .filter((i) => i.category === "aircon_servicing")
+        .map((i) => ({
+          id: i.id,
+          date: (i.scheduledAt ?? i.createdAt).slice(0, 10),
+          title: `${i.title} — ${SHOWROOM_STATUS_LABELS[i.status]}`,
+          time: i.scheduledAt ? new Date(i.scheduledAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", hour12: false }) : null,
+        })),
+    ],
+    [allAnnouncements, showroomItems]
   );
-  const today = todayDateString();
 
   const activeLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
   const overdue = activeLeads.filter((l) => l.nextFollowUpDate && l.nextFollowUpDate < today);
@@ -150,10 +166,10 @@ export const DashboardPage: React.FC = () => {
             Go to Notice Board
           </Link>
         </div>
-        {announcementsQuery.isLoading ? (
+        {announcementsQuery.isLoading || showroomQuery.isLoading ? (
           <Skeleton style={{ height: 220 }} />
         ) : (
-          <EventCalendar events={eventAnnouncements} emptyHint="No dated announcements this month." />
+          <EventCalendar events={dashboardEvents} emptyHint="Nothing scheduled this month." />
         )}
       </div>
 
