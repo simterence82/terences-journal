@@ -33,6 +33,7 @@ function toLead(id: string, data: Record<string, any>): Lead {
     status: data.status,
     quotationAmount: data.quotationAmount ?? null,
     contractAmount: data.contractAmount ?? null,
+    gstApplicable: data.gstApplicable ?? null,
     nextFollowUpDate: data.nextFollowUpDate ?? null,
     firstContactedAt: toIso(data.firstContactedAt),
     closedAt: toIso(data.closedAt),
@@ -106,6 +107,7 @@ export const useCreateLead = () => {
         status: "new" as LeadStatus,
         quotationAmount: null,
         contractAmount: null,
+        gstApplicable: null,
         nextFollowUpDate: input.nextFollowUpDate,
         firstContactedAt: null,
         closedAt: null,
@@ -135,6 +137,7 @@ export interface LeadUpdateInput {
   status?: LeadStatus;
   quotationAmount?: number | null;
   contractAmount?: number | null;
+  gstApplicable?: boolean | null;
   nextFollowUpDate?: string | null;
 }
 

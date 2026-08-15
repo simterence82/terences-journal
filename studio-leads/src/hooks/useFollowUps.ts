@@ -41,6 +41,7 @@ export interface FollowUpCreateInput {
   newStatus?: LeadStatus;
   /** Required alongside newStatus: "signed". */
   contractAmount?: number | null;
+  gstApplicable?: boolean | null;
 }
 
 /**
@@ -69,7 +70,9 @@ export const useCreateFollowUp = () => {
         id: input.leadId,
         nextFollowUpDate: input.nextFollowUpDate,
         ...(input.newStatus ? { status: input.newStatus } : {}),
-        ...(input.newStatus === "signed" ? { contractAmount: input.contractAmount ?? null } : {}),
+        ...(input.newStatus === "signed"
+          ? { contractAmount: input.contractAmount ?? null, gstApplicable: input.gstApplicable ?? null }
+          : {}),
       });
     },
     onSuccess: (_data, variables) => {

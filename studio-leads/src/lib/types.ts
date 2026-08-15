@@ -98,9 +98,12 @@ export interface Lead {
   status: LeadStatus;
   quotationAmount: number | null;
   // Only meaningful once status is "signed" -- the actual contracted
-  // value, which can differ from the quotation. Required to save a lead
-  // as signed; the quotation amount is frozen (read-only) once signed.
+  // value (before GST), which can differ from the quotation. Required to
+  // save a lead as signed; the quotation amount is frozen (read-only)
+  // once signed.
   contractAmount: number | null;
+  // Whether GST applies to contractAmount. null = not yet indicated.
+  gstApplicable: boolean | null;
   nextFollowUpDate: string | null;
   firstContactedAt: string | null;
   closedAt: string | null;

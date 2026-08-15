@@ -425,6 +425,7 @@ const LeadFullDetailDialog: React.FC<{
   const [status, setStatus] = useState<LeadStatus>(lead.status);
   const [quotationAmount, setQuotationAmount] = useState(lead.quotationAmount?.toString() ?? "");
   const [contractAmount, setContractAmount] = useState(lead.contractAmount?.toString() ?? "");
+  const [gstApplicable, setGstApplicable] = useState<boolean | null>(lead.gstApplicable ?? null);
   const [nextFollowUpDate, setNextFollowUpDate] = useState(lead.nextFollowUpDate ?? "");
   const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? OPEN_TO_DESIGNERS);
   const [notes, setNotes] = useState(lead.notes ?? "");
@@ -436,6 +437,7 @@ const LeadFullDetailDialog: React.FC<{
     setStatus(lead.status);
     setQuotationAmount(lead.quotationAmount?.toString() ?? "");
     setContractAmount(lead.contractAmount?.toString() ?? "");
+    setGstApplicable(lead.gstApplicable ?? null);
     setNextFollowUpDate(lead.nextFollowUpDate ?? "");
     setAssignedTo(lead.assignedTo ?? OPEN_TO_DESIGNERS);
     setNotes(lead.notes ?? "");
@@ -463,6 +465,7 @@ const LeadFullDetailDialog: React.FC<{
         status,
         quotationAmount: quotationAmount ? Number(quotationAmount) : null,
         contractAmount: contractAmount ? Number(contractAmount) : null,
+        gstApplicable,
         nextFollowUpDate: nextFollowUpDate || null,
         notes: notes || null,
         ...(assignmentChanged
@@ -517,7 +520,7 @@ const LeadFullDetailDialog: React.FC<{
         outcome: fuOutcome,
         nextFollowUpDate: null,
         newStatus,
-        ...(newStatus === "signed" ? { contractAmount: Number(contractAmount) } : {}),
+        ...(newStatus === "signed" ? { contractAmount: Number(contractAmount), gstApplicable } : {}),
       },
       {
         onSuccess: () => {
@@ -611,9 +614,7 @@ const LeadFullDetailDialog: React.FC<{
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">
-                Quotation Amount (S$) {status === "signed" && <span className="text-faint-ink">(frozen)</span>}
-              </label>
+              <label className="text-[0.8125rem] font-medium text-ink">Quotation Amount (S$)</label>
               <Input
                 type="number"
                 min="0"
@@ -630,7 +631,7 @@ const LeadFullDetailDialog: React.FC<{
           </div>
           {status === "signed" && (
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Contract Amount (S$) *</label>
+              <label className="text-[0.8125rem] font-medium text-ink">Contract Amount Before GST (S$) *</label>
               <Input
                 type="number"
                 min="0"
@@ -639,6 +640,26 @@ const LeadFullDetailDialog: React.FC<{
                 placeholder="The actual signed contract value"
                 required
               />
+              <div className="flex items-center gap-5 text-[0.8125rem]">
+                <label className="flex items-center gap-2 font-medium text-ink">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-line accent-[var(--ok)]"
+                    checked={gstApplicable === true}
+                    onChange={(e) => setGstApplicable(e.target.checked ? true : null)}
+                  />
+                  With GST
+                </label>
+                <label className="flex items-center gap-2 font-medium text-ink">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-line accent-[var(--bad)]"
+                    checked={gstApplicable === false}
+                    onChange={(e) => setGstApplicable(e.target.checked ? false : null)}
+                  />
+                  No GST
+                </label>
+              </div>
             </div>
           )}
           <div className="flex flex-col gap-2">
