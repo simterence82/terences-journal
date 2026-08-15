@@ -58,7 +58,7 @@ export const App: React.FC = () => (
     <Route
       path="/showroom"
       element={
-        <ProtectedRoute roles={["super_admin", "admin"]}>
+        <ProtectedRoute roles={[...EVERYONE]}>
           <ShowroomPage />
         </ProtectedRoute>
       }

@@ -136,11 +136,18 @@ service cloud.firestore {
     }
 
     // Showroom tracking (stock, aircon servicing, faulty reports, new
-    // materials): admin-tier only, both to view and to manage -- designers
-    // don't need this, so unlike leads/attendance there's no scoped
-    // designer-read case here at all.
+    // materials): either admin tier sees and manages everything. Designers
+    // are scoped to the "faulty_report" category only -- they can see and
+    // report issues there, but can't touch any other category, and can't
+    // edit/delete anything at all (even their own reports), matching
+    // Leads' isOwnDesigner-style category scoping: the client must query
+    // with where("category","==","faulty_report") for a designer's list
+    // to be provable against this rule -- see useShowroom.ts.
     match /showroomItems/{id} {
-      allow get, list, create, update, delete: if isAdmin();
+      allow get: if isAdmin() || (isApproved() && resource.data.category == "faulty_report");
+      allow list: if isAdmin() || (isApproved() && resource.data.category == "faulty_report");
+      allow create: if isAdmin() || (isApproved() && request.resource.data.category == "faulty_report");
+      allow update, delete: if isAdmin();
     }
   }
 }

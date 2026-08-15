@@ -7,11 +7,13 @@ import {
   useUpdateShowroomItem,
   useDeleteShowroomItem,
 } from "../hooks/useShowroom";
+import { useAuth } from "../lib/AuthContext";
 import {
   SHOWROOM_CATEGORIES,
   SHOWROOM_CATEGORY_LABELS,
   SHOWROOM_STATUSES,
   SHOWROOM_STATUS_LABELS,
+  isAdminRole,
   type ShowroomCategory,
   type ShowroomItem,
   type ShowroomStatus,
@@ -38,13 +40,25 @@ const STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | 
 };
 
 const EMPTY_FORM = { category: SHOWROOM_CATEGORIES[0] as ShowroomCategory, title: "", description: "", status: "ok" as ShowroomStatus, notes: "" };
+const EMPTY_REPORT_FORM = { title: "", description: "", notes: "" };
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
 }
 
 export const ShowroomPage: React.FC = () => {
-  const listQuery = useShowroomItemsList();
+  const { authState } = useAuth();
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
+  const isAdmin = !!currentUser && isAdminRole(currentUser.role);
+
+  const listQuery = useShowroomItemsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
+  const items = listQuery.data ?? [];
+
+  return isAdmin ? <AdminShowroomView items={items} isLoading={listQuery.isLoading} /> : <DesignerIssueReportView items={items} isLoading={listQuery.isLoading} />;
+};
+
+/** Super admin / admin: full tracker across every category, with edit/delete/status control. */
+const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }> = ({ items, isLoading }) => {
   const createMutation = useCreateShowroomItem();
   const updateMutation = useUpdateShowroomItem();
   const deleteMutation = useDeleteShowroomItem();
@@ -56,7 +70,6 @@ export const ShowroomPage: React.FC = () => {
   const [editing, setEditing] = useState<ShowroomItem | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
 
-  const items = listQuery.data ?? [];
   const visibleItems = categoryFilter === "all" ? items : items.filter((i) => i.category === categoryFilter);
 
   const counts = useMemo(
@@ -134,7 +147,7 @@ export const ShowroomPage: React.FC = () => {
         </Button>
       </div>
 
-      {listQuery.isLoading ? (
+      {isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
             <Skeleton key={i} style={{ height: 96 }} />
@@ -159,7 +172,7 @@ export const ShowroomPage: React.FC = () => {
         className="flex-wrap"
       />
 
-      {listQuery.isLoading ? (
+      {isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} style={{ height: 150 }} />
@@ -280,6 +293,104 @@ export const ShowroomPage: React.FC = () => {
         description={`"${deleteTarget.target?.title ?? ""}" will be removed from the showroom tracker.`}
         onConfirm={handleDelete}
       />
+    </div>
+  );
+};
+
+/**
+ * Designer: scoped to the "faulty_report" category only (enforced by
+ * firestore.rules, not just this UI) -- they can see what's been reported
+ * and report new issues, but every other category and all status/edit
+ * controls are admin-only.
+ */
+const DesignerIssueReportView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }> = ({ items, isLoading }) => {
+  const createMutation = useCreateShowroomItem();
+  const [isReportOpen, setIsReportOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_REPORT_FORM);
+
+  const resetForm = () => setForm(EMPTY_REPORT_FORM);
+
+  const handleReport = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.title.trim()) {
+      toast.error("Give it a short title");
+      return;
+    }
+    createMutation.mutate(
+      { category: "faulty_report", title: form.title, description: form.description || null, status: "needs_attention", notes: form.notes || null },
+      {
+        onSuccess: () => {
+          toast.success("Issue reported -- an admin will follow up");
+          resetForm();
+          setIsReportOpen(false);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to report issue"),
+      }
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-ink">Showroom</h1>
+          <p className="mt-1 text-[0.9375rem] text-faint-ink">Report anything faulty or that needs attention at the showroom</p>
+        </div>
+        <Button onClick={() => setIsReportOpen(true)}>
+          <Plus size={16} /> Report an Issue
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex flex-col gap-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} style={{ height: 100 }} />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <EmptyState icon={<Store size={28} />} message="No issues reported yet." />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {items.map((item) => (
+            <div key={item.id} className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-5 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[0.9375rem] font-semibold text-ink">{item.title}</span>
+                <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
+              </div>
+              {item.description && <p className="text-[0.8125rem] leading-relaxed text-faint-ink">{item.description}</p>}
+              <p className="text-xs text-faint-ink">
+                Reported by {item.reportedByName ?? "someone"} · {formatDate(item.createdAt)}
+              </p>
+              {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={isReportOpen} onOpenChange={(open) => { setIsReportOpen(open); if (!open) resetForm(); }}>
+        <DialogHeader>
+          <DialogTitle>Report an Issue</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleReport} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-ink">What's wrong? *</label>
+            <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Pendant light flickering in the kitchen display" required />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-ink">Details</label>
+            <Textarea rows={3} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Where exactly, since when, anything else worth knowing" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
+            <Textarea rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Reporting..." : "Report Issue"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
     </div>
   );
 };

@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDoc, collection, deleteDoc, doc, getDocs, serverTimestamp, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
-import { CLOSED_SHOWROOM_STATUSES, type ShowroomCategory, type ShowroomItem, type ShowroomStatus } from "../lib/types";
+import { CLOSED_SHOWROOM_STATUSES, isAdminRole, type ShowroomCategory, type ShowroomItem, type ShowroomStatus, type Viewer } from "../lib/types";
 
 const COLLECTION = "showroomItems";
 const KEY = ["showroomItems"] as const;
@@ -23,11 +23,21 @@ function toShowroomItem(id: string, data: Record<string, any>): ShowroomItem {
   };
 }
 
-export const useShowroomItemsList = () =>
+/**
+ * Either admin tier sees every item. A designer's query is constrained to
+ * where("category","==","faulty_report") -- required for firestore.rules'
+ * list rule to allow the read at all, and matches the product decision
+ * that designers only see/report issues, not the rest of the tracker.
+ */
+export const useShowroomItemsList = (viewer: Viewer | null) =>
   useQuery({
-    queryKey: KEY,
+    queryKey: [...KEY, viewer && isAdminRole(viewer.role) ? "all" : "faulty_report"],
+    enabled: !!viewer,
     queryFn: async () => {
-      const snap = await getDocs(collection(db, COLLECTION));
+      const q = isAdminRole(viewer!.role)
+        ? collection(db, COLLECTION)
+        : query(collection(db, COLLECTION), where("category", "==", "faulty_report"));
+      const snap = await getDocs(q);
       const items = snap.docs.map((d) => toShowroomItem(d.id, d.data()));
       items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
       return items;
