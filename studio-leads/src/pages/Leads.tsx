@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Plus, Phone, Mail, MapPin, AlertTriangle, Handshake, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { useLeadsList, useCreateLead, useUpdateLead, useDeleteLead } from "../hooks/useLeads";
+import { useLeadsList, useCreateLead, useUpdateLead, useDeleteLead, useClaimLead } from "../hooks/useLeads";
 import { useFollowUpsForLead, useCreateFollowUp } from "../hooks/useFollowUps";
 import { useDesignersList } from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
@@ -24,6 +24,8 @@ import {
   LEAD_SOURCES,
   LEAD_STATUSES,
   LEAD_STATUS_LABELS,
+  OPEN_TO_DESIGNERS,
+  OPEN_TO_DESIGNERS_LABEL,
   PROJECT_TYPES,
   isAdminRole,
   type Lead,
@@ -70,7 +72,12 @@ export const LeadsPage: React.FC = () => {
   const designers = designersQuery.data ?? [];
   const today = todayDateString();
 
-  const filteredByDesigner = designerFilter === "all" ? leads : leads.filter((l) => l.assignedTo === designerFilter);
+  const filteredByDesigner =
+    designerFilter === "all"
+      ? leads
+      : designerFilter === OPEN_TO_DESIGNERS
+        ? leads.filter((l) => l.assignedTo === null)
+        : leads.filter((l) => l.assignedTo === designerFilter);
   const activeLeads = filteredByDesigner.filter((l) => ACTIVE_STATUSES.includes(l.status));
   const signedLeads = filteredByDesigner.filter((l) => l.status === "signed");
   const rejectedLeads = filteredByDesigner.filter((l) => l.status === "rejected");
@@ -89,9 +96,14 @@ export const LeadsPage: React.FC = () => {
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const designer = designers.find((d) => d.id === addForm.assignedTo);
-    if (!addForm.clientName || !designer) {
-      toast.error("Client name and an assigned designer are required");
+    if (!addForm.clientName) {
+      toast.error("Client name is required");
+      return;
+    }
+    const isOpen = addForm.assignedTo === OPEN_TO_DESIGNERS;
+    const designer = isOpen ? null : designers.find((d) => d.id === addForm.assignedTo);
+    if (!isOpen && !designer) {
+      toast.error("Select a designer, or Open to Designers");
       return;
     }
     createMutation.mutate(
@@ -104,8 +116,8 @@ export const LeadsPage: React.FC = () => {
         address: addForm.address || null,
         budget: addForm.budget ? Number(addForm.budget) : null,
         notes: addForm.notes || null,
-        assignedTo: designer.id,
-        assignedToName: designer.displayName,
+        assignedTo: isOpen ? null : designer!.id,
+        assignedToName: isOpen ? OPEN_TO_DESIGNERS_LABEL : designer!.displayName,
         nextFollowUpDate: addForm.nextFollowUpDate || null,
       },
       {
@@ -161,7 +173,11 @@ export const LeadsPage: React.FC = () => {
             value={designerFilter}
             onValueChange={setDesignerFilter}
             className="w-56"
-            options={[{ value: "all", label: "All Designers" }, ...designers.map((d) => ({ value: d.id, label: d.displayName }))]}
+            options={[
+              { value: "all", label: "All Designers" },
+              { value: OPEN_TO_DESIGNERS, label: OPEN_TO_DESIGNERS_LABEL },
+              ...designers.map((d) => ({ value: d.id, label: d.displayName })),
+            ]}
           />
         )}
       </div>
@@ -178,13 +194,14 @@ export const LeadsPage: React.FC = () => {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleLeads.map((lead) => {
             const overdue = isOverdue(lead, today);
+            const isOpen = lead.assignedTo === null;
             return (
               <button
                 key={lead.id}
                 type="button"
                 onClick={() => setSelectedLeadId(lead.id)}
                 className={`flex flex-col gap-3 rounded-xl border bg-panel p-5 text-left shadow-sm transition-shadow hover:shadow-md ${
-                  overdue ? "border-bad" : "border-line"
+                  overdue ? "border-bad" : isOpen ? "border-accent" : "border-line"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -212,7 +229,11 @@ export const LeadsPage: React.FC = () => {
                   )}
                 </div>
                 <div className="flex items-center justify-between border-t border-line pt-2 text-xs">
-                  <span className="text-faint-ink">{lead.assignedToName ?? "Unassigned"}</span>
+                  {isOpen ? (
+                    <Badge variant="accent">{OPEN_TO_DESIGNERS_LABEL}</Badge>
+                  ) : (
+                    <span className="text-faint-ink">{lead.assignedToName ?? "Unassigned"}</span>
+                  )}
                   {lead.nextFollowUpDate && (
                     <span className={`flex items-center gap-1 font-medium ${overdue ? "text-bad" : "text-faint-ink"}`}>
                       {overdue && <AlertTriangle size={12} />}
@@ -241,7 +262,11 @@ export const LeadsPage: React.FC = () => {
               <Select
                 value={addForm.assignedTo}
                 onValueChange={(v) => setAddForm((p) => ({ ...p, assignedTo: v }))}
-                options={designers.length > 0 ? designers.map((d) => ({ value: d.id, label: d.displayName })) : [{ value: "", label: "No designers yet" }]}
+                options={
+                  designers.length > 0
+                    ? [{ value: OPEN_TO_DESIGNERS, label: `${OPEN_TO_DESIGNERS_LABEL} (any can claim)` }, ...designers.map((d) => ({ value: d.id, label: d.displayName }))]
+                    : [{ value: "", label: "No designers yet" }]
+                }
               />
             </div>
           </div>
@@ -319,14 +344,89 @@ const LeadDetailDialog: React.FC<{
   onClose: () => void;
   onRequestDelete: () => void;
 }> = ({ lead, isAdmin, designers, onClose, onRequestDelete }) => {
+  // Designers don't own an open-to-designers lead yet -- claiming is the
+  // only thing they can do until they do (firestore.rules enforces this
+  // too, not just the UI). Once claimed, `lead` refetches with a real
+  // assignedTo and this same dialog falls through to the full view below.
+  if (lead.assignedTo === null && !isAdmin) {
+    return <ClaimLeadDialog lead={lead} onClose={onClose} />;
+  }
+
+  return <LeadFullDetailDialog lead={lead} isAdmin={isAdmin} designers={designers} onClose={onClose} onRequestDelete={onRequestDelete} />;
+};
+
+const ClaimLeadDialog: React.FC<{ lead: Lead; onClose: () => void }> = ({ lead, onClose }) => {
+  const claimMutation = useClaimLead();
+
+  const handleClaim = () => {
+    claimMutation.mutate(lead.id, {
+      onSuccess: () => toast.success("Lead claimed -- it's yours now"),
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to claim lead"),
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogHeader>
+        <div className="flex items-center gap-2">
+          <DialogTitle>{lead.clientName}</DialogTitle>
+          <Badge variant="accent">{OPEN_TO_DESIGNERS_LABEL}</Badge>
+        </div>
+      </DialogHeader>
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-2 rounded-xl border border-line bg-surface p-4 text-[0.8125rem] sm:grid-cols-2">
+          <div>
+            <span className="text-faint-ink">Contact: </span>
+            <span className="text-ink">{[lead.phone, lead.email].filter(Boolean).join(" · ") || "—"}</span>
+          </div>
+          <div>
+            <span className="text-faint-ink">Address: </span>
+            <span className="text-ink">{lead.address ?? "—"}</span>
+          </div>
+          <div>
+            <span className="text-faint-ink">Source: </span>
+            <span className="text-ink">{lead.source}</span>
+          </div>
+          <div>
+            <span className="text-faint-ink">Project Type: </span>
+            <span className="text-ink">{lead.projectType}</span>
+          </div>
+          <div>
+            <span className="text-faint-ink">Budget: </span>
+            <span className="text-ink">{lead.budget != null ? formatSGD(lead.budget) : "—"}</span>
+          </div>
+        </div>
+        {lead.notes && <p className="text-[0.8125rem] text-faint-ink">{lead.notes}</p>}
+        <p className="text-[0.8125rem] text-faint-ink">
+          This lead hasn't been claimed yet. Claim it to take ownership -- once you do, it moves to your own leads and no
+          other designer can take it.
+        </p>
+        <DialogFooter>
+          <Button onClick={handleClaim} disabled={claimMutation.isPending}>
+            {claimMutation.isPending ? "Claiming..." : "Claim This Lead"}
+          </Button>
+        </DialogFooter>
+      </div>
+    </Dialog>
+  );
+};
+
+const LeadFullDetailDialog: React.FC<{
+  lead: Lead;
+  isAdmin: boolean;
+  designers: { id: string; displayName: string }[];
+  onClose: () => void;
+  onRequestDelete: () => void;
+}> = ({ lead, isAdmin, designers, onClose, onRequestDelete }) => {
   const updateMutation = useUpdateLead();
   const followUpsQuery = useFollowUpsForLead(lead.id);
   const createFollowUp = useCreateFollowUp();
 
   const [status, setStatus] = useState<LeadStatus>(lead.status);
   const [quotationAmount, setQuotationAmount] = useState(lead.quotationAmount?.toString() ?? "");
+  const [contractAmount, setContractAmount] = useState(lead.contractAmount?.toString() ?? "");
   const [nextFollowUpDate, setNextFollowUpDate] = useState(lead.nextFollowUpDate ?? "");
-  const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? "");
+  const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? OPEN_TO_DESIGNERS);
   const [notes, setNotes] = useState(lead.notes ?? "");
   // Follow-up history is noise once a deal is closed -- collapsed by
   // default for signed/rejected leads, but still one click away.
@@ -335,8 +435,9 @@ const LeadDetailDialog: React.FC<{
   useEffect(() => {
     setStatus(lead.status);
     setQuotationAmount(lead.quotationAmount?.toString() ?? "");
+    setContractAmount(lead.contractAmount?.toString() ?? "");
     setNextFollowUpDate(lead.nextFollowUpDate ?? "");
-    setAssignedTo(lead.assignedTo ?? "");
+    setAssignedTo(lead.assignedTo ?? OPEN_TO_DESIGNERS);
     setNotes(lead.notes ?? "");
     setShowFollowUps(!CLOSED_LEAD_STATUSES.includes(lead.status));
   }, [lead]);
@@ -346,16 +447,26 @@ const LeadDetailDialog: React.FC<{
   const [fuNextDate, setFuNextDate] = useState("");
 
   const handleSaveDetails = () => {
-    const designer = designers.find((d) => d.id === assignedTo);
+    if (status === "signed" && !contractAmount.trim()) {
+      toast.error("Contract amount is required once a lead is marked signed");
+      return;
+    }
+
+    const isOpenSelection = assignedTo === OPEN_TO_DESIGNERS;
+    const designer = isOpenSelection ? null : designers.find((d) => d.id === assignedTo);
+    const assignmentChanged =
+      isAdmin && ((isOpenSelection && lead.assignedTo !== null) || (!isOpenSelection && !!designer && designer.id !== lead.assignedTo));
+
     updateMutation.mutate(
       {
         id: lead.id,
         status,
         quotationAmount: quotationAmount ? Number(quotationAmount) : null,
+        contractAmount: contractAmount ? Number(contractAmount) : null,
         nextFollowUpDate: nextFollowUpDate || null,
         notes: notes || null,
-        ...(isAdmin && designer && designer.id !== lead.assignedTo
-          ? { assignedTo: designer.id, assignedToName: designer.displayName }
+        ...(assignmentChanged
+          ? { assignedTo: isOpenSelection ? null : designer!.id, assignedToName: isOpenSelection ? OPEN_TO_DESIGNERS_LABEL : designer!.displayName }
           : {}),
       },
       {
@@ -394,8 +505,20 @@ const LeadDetailDialog: React.FC<{
       toast.error("Describe what happened before closing the lead");
       return;
     }
+    if (newStatus === "signed" && !contractAmount.trim()) {
+      setStatus("signed");
+      toast.error("Enter the Contract Amount above before marking this lead signed");
+      return;
+    }
     createFollowUp.mutate(
-      { leadId: lead.id, method: fuMethod as any, outcome: fuOutcome, nextFollowUpDate: null, newStatus },
+      {
+        leadId: lead.id,
+        method: fuMethod as any,
+        outcome: fuOutcome,
+        nextFollowUpDate: null,
+        newStatus,
+        ...(newStatus === "signed" ? { contractAmount: Number(contractAmount) } : {}),
+      },
       {
         onSuccess: () => {
           toast.success(newStatus === "signed" ? "Lead marked as signed" : "Lead marked as rejected");
@@ -457,7 +580,11 @@ const LeadDetailDialog: React.FC<{
             {isAdmin && (
               <div className="flex flex-col gap-2">
                 <label className="text-[0.8125rem] font-medium text-ink">Assigned To</label>
-                <Select value={assignedTo} onValueChange={setAssignedTo} options={designers.map((d) => ({ value: d.id, label: d.displayName }))} />
+                <Select
+                  value={assignedTo}
+                  onValueChange={setAssignedTo}
+                  options={[{ value: OPEN_TO_DESIGNERS, label: OPEN_TO_DESIGNERS_LABEL }, ...designers.map((d) => ({ value: d.id, label: d.displayName }))]}
+                />
               </div>
             )}
           </div>
@@ -484,14 +611,36 @@ const LeadDetailDialog: React.FC<{
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Quotation Amount (S$)</label>
-              <Input type="number" min="0" value={quotationAmount} onChange={(e) => setQuotationAmount(e.target.value)} />
+              <label className="text-[0.8125rem] font-medium text-ink">
+                Quotation Amount (S$) {status === "signed" && <span className="text-faint-ink">(frozen)</span>}
+              </label>
+              <Input
+                type="number"
+                min="0"
+                value={quotationAmount}
+                onChange={(e) => setQuotationAmount(e.target.value)}
+                disabled={status === "signed"}
+                className={status === "signed" ? "opacity-60" : ""}
+              />
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-ink">Next Follow-up Due</label>
               <Input type="date" value={nextFollowUpDate} onChange={(e) => setNextFollowUpDate(e.target.value)} />
             </div>
           </div>
+          {status === "signed" && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-ink">Contract Amount (S$) *</label>
+              <Input
+                type="number"
+                min="0"
+                value={contractAmount}
+                onChange={(e) => setContractAmount(e.target.value)}
+                placeholder="The actual signed contract value"
+                required
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
             <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="General notes about this client/project" />

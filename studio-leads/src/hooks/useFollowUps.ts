@@ -39,6 +39,8 @@ export interface FollowUpCreateInput {
   nextFollowUpDate: string | null;
   /** Optionally move the lead's status in the same action (e.g. -> "signed"). */
   newStatus?: LeadStatus;
+  /** Required alongside newStatus: "signed". */
+  contractAmount?: number | null;
 }
 
 /**
@@ -67,6 +69,7 @@ export const useCreateFollowUp = () => {
         id: input.leadId,
         nextFollowUpDate: input.nextFollowUpDate,
         ...(input.newStatus ? { status: input.newStatus } : {}),
+        ...(input.newStatus === "signed" ? { contractAmount: input.contractAmount ?? null } : {}),
       });
     },
     onSuccess: (_data, variables) => {

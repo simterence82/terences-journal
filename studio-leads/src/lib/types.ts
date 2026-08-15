@@ -38,6 +38,13 @@ export interface PendingUser {
   requestedAt: string | null;
 }
 
+// A lead with assignedTo == null is "open to designers" -- unclaimed,
+// visible to every designer, and any one of them can claim it (assigns it
+// to themselves). Used as the sentinel value in the "Assign To" dropdown;
+// the actual stored value is assignedTo: null, assignedToName: this label.
+export const OPEN_TO_DESIGNERS = "__open_to_designers__";
+export const OPEN_TO_DESIGNERS_LABEL = "Open to Designers";
+
 export const LEAD_STATUSES = [
   "new",
   "contacted",
@@ -90,6 +97,10 @@ export interface Lead {
   assignedToName: string | null;
   status: LeadStatus;
   quotationAmount: number | null;
+  // Only meaningful once status is "signed" -- the actual contracted
+  // value, which can differ from the quotation. Required to save a lead
+  // as signed; the quotation amount is frozen (read-only) once signed.
+  contractAmount: number | null;
   nextFollowUpDate: string | null;
   firstContactedAt: string | null;
   closedAt: string | null;
