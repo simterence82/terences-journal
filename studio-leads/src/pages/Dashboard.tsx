@@ -168,24 +168,6 @@ export const DashboardPage: React.FC = () => {
         )}
       </div>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">Away Calendar</h2>
-          <Link to="/attendance" className="text-[0.8125rem] text-brand hover:underline">
-            {isAdmin ? "Go to Attendance" : "Apply for leave"}
-          </Link>
-        </div>
-        {leaveCalendarQuery.isLoading ? (
-          <Skeleton style={{ height: 220 }} />
-        ) : (
-          <LeaveCalendar
-            records={leaveCalendarQuery.data ?? []}
-            showReasons
-            emptyHint="No one on the team has leave scheduled this month."
-          />
-        )}
-      </div>
-
       {isAdmin && (
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -239,6 +221,24 @@ export const DashboardPage: React.FC = () => {
           )}
         </div>
       )}
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Away Calendar</h2>
+          <Link to="/attendance" className="text-[0.8125rem] text-brand hover:underline">
+            {isAdmin ? "Go to Attendance" : "Apply for leave"}
+          </Link>
+        </div>
+        {leaveCalendarQuery.isLoading ? (
+          <Skeleton style={{ height: 220 }} />
+        ) : (
+          <LeaveCalendar
+            records={leaveCalendarQuery.data ?? []}
+            showReasons
+            emptyHint="No one on the team has leave scheduled this month."
+          />
+        )}
+      </div>
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
