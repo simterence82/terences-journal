@@ -6,6 +6,7 @@ import { useDesignersList } from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
 import { summarizeAttendance, type DesignerAttendanceSummary } from "../lib/attendanceSummary";
+import { buildMonthGrid, monthLabel } from "../lib/calendarUtil";
 import { KPI_PERIOD_LABELS, type KpiPeriod } from "../lib/kpi";
 import { Input } from "../components/Input";
 import { Select } from "../components/Select";
@@ -20,6 +21,7 @@ import {
   ATTENDANCE_REASON_LABELS,
   ATTENDANCE_STATUSES,
   ATTENDANCE_STATUS_LABELS,
+  LEAVE_REASONS,
   isAdminRole,
   type AttendanceReason,
   type AttendanceRecord,
@@ -44,28 +46,7 @@ const STATUS_DOT_CLASS: Record<AttendanceStatus, string> = {
 
 const LOW_ATTENDANCE_THRESHOLD = 70;
 
-type Tab = "mark" | "calendar" | "history" | "summary";
-
-function monthLabel(d: Date): string {
-  return d.toLocaleDateString("en-SG", { month: "long", year: "numeric" });
-}
-
-function toDateStr(year: number, month: number, day: number): string {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-/** Sun-Sat week grid for the given month, padded with nulls outside the month. */
-function buildMonthGrid(year: number, month: number): (string | null)[][] {
-  const startWeekday = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const cells: (string | null)[] = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let day = 1; day <= daysInMonth; day++) cells.push(toDateStr(year, month, day));
-  while (cells.length % 7 !== 0) cells.push(null);
-  const weeks: (string | null)[][] = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
-  return weeks;
-}
+type Tab = "mark" | "calendar" | "leave" | "history" | "summary";
 
 function csvEscape(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -112,7 +93,7 @@ export const AttendancePage: React.FC = () => {
   const designersQuery = useDesignersList();
   const markMutation = useMarkAttendance();
 
-  const [tab, setTab] = useState<Tab>(isAdmin ? "mark" : "history");
+  const [tab, setTab] = useState<Tab>(isAdmin ? "mark" : "leave");
   const [selectedDate, setSelectedDate] = useState(todayDateString());
   const [summaryPeriod, setSummaryPeriod] = useState<KpiPeriod>("this_month");
 
@@ -142,6 +123,19 @@ export const AttendancePage: React.FC = () => {
       { designerId, designerName, date: selectedDate, status, reason, notes },
       { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save attendance") }
     );
+  };
+
+  const handleApplyLeave = async (dates: string[], reason: AttendanceReason, notes: string | null) => {
+    if (!currentUser) return;
+    const results = await Promise.allSettled(
+      dates.map((date) =>
+        markMutation.mutateAsync({ designerId: currentUser.id, designerName: currentUser.displayName, date, status: "leave", reason, notes })
+      )
+    );
+    const succeeded = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.length - succeeded;
+    if (succeeded > 0) toast.success(`Applied for leave on ${succeeded} day${succeeded > 1 ? "s" : ""}`);
+    if (failed > 0) toast.error(`${failed} day${failed > 1 ? "s" : ""} already had an attendance record and ${failed > 1 ? "were" : "was"} skipped`);
   };
 
   // -- Calendar tab state --
@@ -179,6 +173,7 @@ export const AttendancePage: React.FC = () => {
         { value: "summary", label: "Summary" },
       ]
     : [
+        { value: "leave", label: "Apply for Leave" },
         { value: "history", label: "History" },
         { value: "summary", label: "Summary" },
       ];
@@ -353,6 +348,45 @@ export const AttendancePage: React.FC = () => {
               />
             )}
           </Dialog>
+        </div>
+      )}
+
+      {tab === "leave" && !isAdmin && currentUser && (
+        <div className="flex flex-col gap-6">
+          <ApplyLeaveForm isSaving={markMutation.isPending} onApply={handleApplyLeave} />
+          <div className="flex flex-col gap-3">
+            <h3 className="font-display text-base font-semibold text-ink">Your Leave</h3>
+            {records.filter((r) => r.status === "leave").length === 0 ? (
+              <EmptyState icon={<CalendarCheck size={24} />} message="No leave applied yet." className="py-6" />
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-line bg-panel shadow-sm">
+                <table className="w-full text-[0.8125rem]">
+                  <thead className="bg-surface">
+                    <tr>
+                      {["Date", "Reason", "Notes"].map((h) => (
+                        <th key={h} className="border-b border-line px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {records
+                      .filter((r) => r.status === "leave")
+                      .map((r) => (
+                        <tr key={r.id} className="hover:bg-surface">
+                          <td className="border-b border-line px-4 py-3 text-ink">
+                            {new Date(`${r.date}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
+                          </td>
+                          <td className="border-b border-line px-4 py-3 text-faint-ink">{r.reason ? ATTENDANCE_REASON_LABELS[r.reason] : "—"}</td>
+                          <td className="border-b border-line px-4 py-3 text-faint-ink">{r.notes ?? "—"}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -594,6 +628,66 @@ const CalendarMarkForm: React.FC<{
           {isSaving ? "Saving..." : "Save"}
         </Button>
       </DialogFooter>
+    </form>
+  );
+};
+
+/** Designers' only write path on this page -- a date-range leave request. */
+const ApplyLeaveForm: React.FC<{
+  isSaving: boolean;
+  onApply: (dates: string[], reason: AttendanceReason, notes: string | null) => void;
+}> = ({ isSaving, onApply }) => {
+  const today = todayDateString();
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
+  const [reason, setReason] = useState<AttendanceReason>(LEAVE_REASONS[0]);
+  const [notes, setNotes] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (toDate < fromDate) {
+      toast.error("End date can't be before the start date");
+      return;
+    }
+    const dates: string[] = [];
+    const cursor = new Date(`${fromDate}T00:00:00`);
+    const end = new Date(`${toDate}T00:00:00`);
+    while (cursor <= end) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    onApply(dates, reason, notes || null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 shadow-sm">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <label className="text-[0.8125rem] font-medium text-ink">From</label>
+          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-[0.8125rem] font-medium text-ink">To</label>
+          <Input type="date" value={toDate} min={fromDate} onChange={(e) => setToDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="text-[0.8125rem] font-medium text-ink">Reason</label>
+        <Select
+          value={reason}
+          onValueChange={(v) => setReason(v as AttendanceReason)}
+          options={LEAVE_REASONS.map((r) => ({ value: r, label: ATTENDANCE_REASON_LABELS[r] }))}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note for your admin" />
+      </div>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? "Submitting..." : "Apply for Leave"}
+        </Button>
+      </div>
     </form>
   );
 };

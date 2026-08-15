@@ -127,12 +127,22 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Either admin tier marks attendance (product decision: admin-marked,
-    // not self-check-in). Designers can read only their own history.
+    // Either admin tier marks day-to-day attendance (product decision:
+    // admin-marked, not self-check-in). Designers can read only their own
+    // full history, but everyone approved can see who's on leave -- see
+    // the "leave" clauses below -- without seeing anyone else's
+    // present/late/absent details.
+    //
+    // A designer's only write is applying for their own leave: create-only
+    // (never update, so they can't silently overwrite a day an admin
+    // already recorded), and only with status == "leave" -- see
+    // useAttendance.ts.
     match /attendance/{id} {
-      allow get: if isAdmin() || isOwnDesigner(resource.data.designerId);
-      allow list: if isAdmin() || isOwnDesigner(resource.data.designerId);
-      allow create, update: if isAdmin();
+      allow get: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave");
+      allow list: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave");
+      allow create: if isAdmin() ||
+        (isApproved() && request.resource.data.designerId == request.auth.uid && request.resource.data.status == "leave");
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 

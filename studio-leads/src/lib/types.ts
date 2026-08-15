@@ -163,6 +163,11 @@ export const ATTENDANCE_REASON_LABELS: Record<AttendanceReason, string> = {
   other: "Other",
 };
 
+// Reasons a designer can self-select when applying for leave -- excludes
+// "unauthorized", which only makes sense as something an admin assigns
+// after the fact (a no-show), not something a designer would apply for.
+export const LEAVE_REASONS: AttendanceReason[] = ATTENDANCE_REASONS.filter((r) => r !== "unauthorized");
+
 export interface AttendanceRecord {
   id: string;
   designerId: string;

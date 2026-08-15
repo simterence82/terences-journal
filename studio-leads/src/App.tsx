@@ -42,7 +42,7 @@ export const App: React.FC = () => (
     <Route
       path="/kpi"
       element={
-        <ProtectedRoute roles={[...EVERYONE]}>
+        <ProtectedRoute roles={["super_admin", "admin"]}>
           <KpiPage />
         </ProtectedRoute>
       }

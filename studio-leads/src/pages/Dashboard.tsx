@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, CalendarClock, Handshake, Megaphone, TrendingUp } from "lucide-react";
 import { useLeadsList } from "../hooks/useLeads";
 import { useAnnouncementsList } from "../hooks/useAnnouncements";
+import { useAttendanceList } from "../hooks/useAttendance";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
 import { CLOSED_LEAD_STATUSES, isAdminRole } from "../lib/types";
@@ -11,6 +12,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { Badge } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
+import { LeaveCalendar } from "../components/LeaveCalendar";
 
 export const DashboardPage: React.FC = () => {
   const { authState } = useAuth();
@@ -19,8 +21,10 @@ export const DashboardPage: React.FC = () => {
 
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const announcementsQuery = useAnnouncementsList();
+  const attendanceQuery = useAttendanceList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const leads = leadsQuery.data ?? [];
   const announcements = (announcementsQuery.data ?? []).slice(0, 3);
+  const attendance = attendanceQuery.data ?? [];
   const today = todayDateString();
 
   const activeLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
@@ -60,9 +64,9 @@ export const DashboardPage: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard label="Active Leads" value={activeLeads.length} icon={<Handshake size={16} />} tone="brand" />
-          <SummaryCard label="Overdue Follow-ups" value={overdue.length} icon={<AlertTriangle size={16} />} tone={overdue.length > 0 ? "bad" : "ok"} />
-          <SummaryCard label="Due Today" value={dueToday.length} icon={<CalendarClock size={16} />} tone="warn" />
+          <SummaryCard label="Active Leads" value={activeLeads.length} icon={<Handshake size={16} />} tone="brand" to="/leads" />
+          <SummaryCard label="Overdue Follow-ups" value={overdue.length} icon={<AlertTriangle size={16} />} tone={overdue.length > 0 ? "bad" : "ok"} to="/leads" />
+          <SummaryCard label="Due Today" value={dueToday.length} icon={<CalendarClock size={16} />} tone="warn" to="/leads" />
           <SummaryCard label="Signed This Month" value={signedThisMonth.length} icon={<TrendingUp size={16} />} tone="ok" />
         </div>
       )}
@@ -110,6 +114,24 @@ export const DashboardPage: React.FC = () => {
               </tbody>
             </table>
           </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Leave Calendar</h2>
+          <Link to="/attendance" className="text-[0.8125rem] text-brand hover:underline">
+            {isAdmin ? "Go to Attendance" : "Apply for leave"}
+          </Link>
+        </div>
+        {attendanceQuery.isLoading ? (
+          <Skeleton style={{ height: 220 }} />
+        ) : (
+          <LeaveCalendar
+            records={attendance}
+            showReasons
+            emptyHint={isAdmin ? "No one on the team has leave scheduled this month." : "You have no leave scheduled this month."}
+          />
         )}
       </div>
 

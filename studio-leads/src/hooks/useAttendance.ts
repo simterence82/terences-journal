@@ -40,6 +40,21 @@ export const useAttendanceList = (viewer: Viewer | null) =>
     },
   });
 
+/**
+ * Every approved user (any role) can see who's on leave company-wide, even
+ * though they still can't see anyone else's present/late/absent records --
+ * see firestore.rules. The query itself must filter on status=="leave" for
+ * the list rule to be provable.
+ */
+export const useLeaveCalendarList = () =>
+  useQuery({
+    queryKey: ["attendance", "leaveCalendar"],
+    queryFn: async () => {
+      const snap = await getDocs(query(collection(db, COLLECTION), where("status", "==", "leave")));
+      return snap.docs.map((d) => toAttendance(d.id, d.data()));
+    },
+  });
+
 export interface MarkAttendanceInput {
   designerId: string;
   designerName: string;
@@ -49,7 +64,14 @@ export interface MarkAttendanceInput {
   notes: string | null;
 }
 
-/** One doc per designer per day -- marking again for the same day overwrites it. */
+/**
+ * One doc per designer per day -- marking again for the same day overwrites
+ * it. Also doubles as a designer's "apply for leave" write: firestore.rules
+ * lets a designer create (not overwrite) their own doc when status ==
+ * "leave", which setDoc naturally routes to since the doc doesn't exist yet
+ * for a day nobody has recorded. Applying for an already-recorded day fails
+ * -- surfaced to the caller as a rejected promise.
+ */
 export const useMarkAttendance = () => {
   const qc = useQueryClient();
   return useMutation({
