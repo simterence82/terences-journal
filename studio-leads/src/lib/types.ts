@@ -160,3 +160,14 @@ export interface AttendanceRecord {
   markedBy: string | null;
   markedAt: string | null;
 }
+
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  pinned: boolean;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}

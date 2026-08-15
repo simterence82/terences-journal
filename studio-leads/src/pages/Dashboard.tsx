@@ -1,12 +1,14 @@
 import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, CalendarClock, Handshake, TrendingUp } from "lucide-react";
+import { AlertTriangle, CalendarClock, Handshake, Megaphone, TrendingUp } from "lucide-react";
 import { useLeadsList } from "../hooks/useLeads";
+import { useAnnouncementsList } from "../hooks/useAnnouncements";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
 import { CLOSED_LEAD_STATUSES, isAdminRole } from "../lib/types";
 import { SummaryCard } from "../components/SummaryCard";
 import { StatusBadge } from "../components/StatusBadge";
+import { Badge } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 
@@ -16,7 +18,9 @@ export const DashboardPage: React.FC = () => {
   const isAdmin = !!currentUser && isAdminRole(currentUser.role);
 
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
+  const announcementsQuery = useAnnouncementsList();
   const leads = leadsQuery.data ?? [];
+  const announcements = (announcementsQuery.data ?? []).slice(0, 3);
   const today = todayDateString();
 
   const activeLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
@@ -105,6 +109,32 @@ export const DashboardPage: React.FC = () => {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Notice Board</h2>
+          <Link to="/notice-board" className="text-[0.8125rem] text-brand hover:underline">
+            View all
+          </Link>
+        </div>
+        {announcementsQuery.isLoading ? (
+          <Skeleton style={{ height: 100 }} />
+        ) : announcements.length === 0 ? (
+          <EmptyState icon={<Megaphone size={24} />} message="No announcements yet." className="py-8" />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {announcements.map((a) => (
+              <div key={a.id} className="rounded-xl border border-line bg-panel p-4 shadow-sm">
+                <div className="flex items-center gap-2">
+                  {a.pinned && <Badge variant="brand">Pinned</Badge>}
+                  <h3 className="font-display text-[0.9375rem] font-semibold text-ink">{a.title}</h3>
+                </div>
+                <p className="mt-1 line-clamp-2 text-[0.8125rem] text-faint-ink">{a.body}</p>
+              </div>
+            ))}
           </div>
         )}
       </div>

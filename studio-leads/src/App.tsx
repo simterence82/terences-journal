@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/Dashboard";
 import { LeadsPage } from "./pages/Leads";
 import { AttendancePage } from "./pages/Attendance";
 import { KpiPage } from "./pages/Kpi";
+import { NoticeBoardPage } from "./pages/NoticeBoard";
 import { UsersPage } from "./pages/Users";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
@@ -42,6 +43,14 @@ export const App: React.FC = () => (
       element={
         <ProtectedRoute roles={[...EVERYONE]}>
           <KpiPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/notice-board"
+      element={
+        <ProtectedRoute roles={[...EVERYONE]}>
+          <NoticeBoardPage />
         </ProtectedRoute>
       }
     />

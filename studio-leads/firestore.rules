@@ -127,5 +127,12 @@ service cloud.firestore {
       allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
+
+    // Company news/notice board: every approved user (any role) can read;
+    // only either admin tier can post/edit/pin/delete.
+    match /announcements/{id} {
+      allow get, list: if isApproved();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
