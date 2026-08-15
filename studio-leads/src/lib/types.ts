@@ -142,6 +142,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 // "present". Singapore-workplace-flavoured but easy to extend.
 export const ATTENDANCE_REASONS = [
   "annual_leave",
+  "holiday",
   "mc",
   "childcare_leave",
   "compassionate_leave",
@@ -154,6 +155,7 @@ export type AttendanceReason = (typeof ATTENDANCE_REASONS)[number];
 
 export const ATTENDANCE_REASON_LABELS: Record<AttendanceReason, string> = {
   annual_leave: "Annual Leave",
+  holiday: "Holiday",
   mc: "MC (Medical Certificate)",
   childcare_leave: "Childcare Leave",
   compassionate_leave: "Compassionate Leave",
@@ -169,6 +171,20 @@ export const ATTENDANCE_REASON_LABELS: Record<AttendanceReason, string> = {
 // applies for in advance).
 export const LEAVE_REASONS: AttendanceReason[] = ATTENDANCE_REASONS.filter((r) => r !== "unauthorized" && r !== "off_in_lieu");
 
+// A designer's self-applied leave starts "pending" and only shows up in
+// the away calendars once an admin approves it; leave an admin marks
+// directly (Mark Today / Calendar tab) is auto-"approved" since they
+// already have the authority. null for non-"leave" statuses, where
+// approval doesn't apply.
+export const LEAVE_APPROVAL_STATUSES = ["pending", "approved", "rejected"] as const;
+export type LeaveApprovalStatus = (typeof LEAVE_APPROVAL_STATUSES)[number];
+
+export const LEAVE_APPROVAL_LABELS: Record<LeaveApprovalStatus, string> = {
+  pending: "Pending",
+  approved: "Approved",
+  rejected: "Not Approved",
+};
+
 export interface AttendanceRecord {
   id: string;
   designerId: string;
@@ -179,6 +195,7 @@ export interface AttendanceRecord {
   notes: string | null;
   markedBy: string | null;
   markedAt: string | null;
+  leaveApproval: LeaveApprovalStatus | null;
 }
 
 export interface Announcement {
@@ -242,4 +259,9 @@ export interface ShowroomItem {
   createdAt: string;
   updatedAt: string | null;
   resolvedAt: string | null;
+  // Local datetime string (from a <input type="datetime-local">), e.g.
+  // "2026-03-14T14:30". Only ever set for category == "aircon_servicing"
+  // with status == "servicing_scheduled" -- drives the servicing calendar
+  // on that category's page. Null otherwise.
+  scheduledAt: string | null;
 }

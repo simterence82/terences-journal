@@ -20,6 +20,7 @@ function toShowroomItem(id: string, data: Record<string, any>): ShowroomItem {
     createdAt: toIso(data.createdAt) ?? new Date(0).toISOString(),
     updatedAt: toIso(data.updatedAt),
     resolvedAt: toIso(data.resolvedAt),
+    scheduledAt: data.scheduledAt ?? null,
   };
 }
 
@@ -50,6 +51,8 @@ export interface ShowroomItemCreateInput {
   description: string | null;
   status: ShowroomStatus;
   notes: string | null;
+  /** Only meaningful for category "aircon_servicing" + status "servicing_scheduled". */
+  scheduledAt?: string | null;
 }
 
 export const useCreateShowroomItem = () => {
@@ -77,6 +80,7 @@ export interface ShowroomItemUpdateInput {
   description?: string | null;
   status?: ShowroomStatus;
   notes?: string | null;
+  scheduledAt?: string | null;
 }
 
 export const useUpdateShowroomItem = () => {

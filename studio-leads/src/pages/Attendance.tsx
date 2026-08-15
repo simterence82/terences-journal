@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Download } from "lucide-react";
+import { CalendarCheck, Check, ChevronLeft, ChevronRight, ClipboardList, Download, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useAttendanceList, useMarkAttendance } from "../hooks/useAttendance";
+import { useAttendanceList, useLeaveCalendarList, useMarkAttendance, useSetLeaveApproval } from "../hooks/useAttendance";
 import { useDesignersList } from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
@@ -16,16 +16,19 @@ import { Tabs } from "../components/Tabs";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
+import { LeaveCalendar } from "../components/LeaveCalendar";
 import {
   ATTENDANCE_REASONS,
   ATTENDANCE_REASON_LABELS,
   ATTENDANCE_STATUSES,
   ATTENDANCE_STATUS_LABELS,
+  LEAVE_APPROVAL_LABELS,
   LEAVE_REASONS,
   isAdminRole,
   type AttendanceReason,
   type AttendanceRecord,
   type AttendanceStatus,
+  type LeaveApprovalStatus,
 } from "../lib/types";
 
 const STATUS_VARIANT: Record<AttendanceStatus, "ok" | "warn" | "outline" | "accent" | "bad"> = {
@@ -34,6 +37,12 @@ const STATUS_VARIANT: Record<AttendanceStatus, "ok" | "warn" | "outline" | "acce
   half_day: "outline",
   leave: "accent",
   absent: "bad",
+};
+
+const APPROVAL_VARIANT: Record<LeaveApprovalStatus, "ok" | "warn" | "bad"> = {
+  pending: "warn",
+  approved: "ok",
+  rejected: "bad",
 };
 
 const STATUS_DOT_CLASS: Record<AttendanceStatus, string> = {
@@ -92,6 +101,8 @@ export const AttendancePage: React.FC = () => {
   const attendanceQuery = useAttendanceList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const designersQuery = useDesignersList();
   const markMutation = useMarkAttendance();
+  const approvalMutation = useSetLeaveApproval();
+  const leaveCalendarQuery = useLeaveCalendarList();
 
   const [tab, setTab] = useState<Tab>(isAdmin ? "mark" : "leave");
   const [selectedDate, setSelectedDate] = useState(todayDateString());
@@ -120,8 +131,18 @@ export const AttendancePage: React.FC = () => {
 
   const handleMark = (designerId: string, designerName: string, status: AttendanceStatus, reason: AttendanceReason | null, notes: string | null) => {
     markMutation.mutate(
-      { designerId, designerName, date: selectedDate, status, reason, notes },
+      { designerId, designerName, date: selectedDate, status, reason, notes, leaveApproval: status === "leave" ? "approved" : null },
       { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save attendance") }
+    );
+  };
+
+  const handleApprove = (record: AttendanceRecord, approval: "approved" | "rejected") => {
+    approvalMutation.mutate(
+      { id: record.id, approval },
+      {
+        onSuccess: () => toast.success(approval === "approved" ? "Leave approved" : "Leave marked not approved"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update approval"),
+      }
     );
   };
 
@@ -129,7 +150,7 @@ export const AttendancePage: React.FC = () => {
     if (!currentUser) return;
     const results = await Promise.allSettled(
       dates.map((date) =>
-        markMutation.mutateAsync({ designerId: currentUser.id, designerName: currentUser.displayName, date, status: "leave", reason, notes })
+        markMutation.mutateAsync({ designerId: currentUser.id, designerName: currentUser.displayName, date, status: "leave", reason, notes, leaveApproval: "pending" })
       )
     );
     const succeeded = results.filter((r) => r.status === "fulfilled").length;
@@ -335,7 +356,7 @@ export const AttendancePage: React.FC = () => {
                 isSaving={markMutation.isPending}
                 onSave={(status, reason, notes) => {
                   markMutation.mutate(
-                    { designerId: calendarDesigner.id, designerName: calendarDesigner.displayName, date: calendarDialogDate, status, reason, notes },
+                    { designerId: calendarDesigner.id, designerName: calendarDesigner.displayName, date: calendarDialogDate, status, reason, notes, leaveApproval: status === "leave" ? "approved" : null },
                     {
                       onSuccess: () => {
                         toast.success("Attendance saved");
@@ -363,7 +384,7 @@ export const AttendancePage: React.FC = () => {
                 <table className="w-full text-[0.8125rem]">
                   <thead className="bg-surface">
                     <tr>
-                      {["Date", "Reason", "Notes"].map((h) => (
+                      {["Date", "Reason", "Approval", "Notes"].map((h) => (
                         <th key={h} className="border-b border-line px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
                           {h}
                         </th>
@@ -379,12 +400,29 @@ export const AttendancePage: React.FC = () => {
                             {new Date(`${r.date}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
                           </td>
                           <td className="border-b border-line px-4 py-3 text-faint-ink">{r.reason ? ATTENDANCE_REASON_LABELS[r.reason] : "—"}</td>
+                          <td className="border-b border-line px-4 py-3">
+                            <Badge variant={r.leaveApproval ? APPROVAL_VARIANT[r.leaveApproval] : "outline"}>
+                              {r.leaveApproval ? LEAVE_APPROVAL_LABELS[r.leaveApproval] : "—"}
+                            </Badge>
+                          </td>
                           <td className="border-b border-line px-4 py-3 text-faint-ink">{r.notes ?? "—"}</td>
                         </tr>
                       ))}
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <div>
+              <h3 className="font-display text-base font-semibold text-ink">Team Away Calendar</h3>
+              <p className="text-[0.8125rem] text-faint-ink">Who's out, at a glance -- once their leave is approved.</p>
+            </div>
+            {leaveCalendarQuery.isLoading ? (
+              <Skeleton style={{ height: 220 }} />
+            ) : (
+              <LeaveCalendar records={leaveCalendarQuery.data ?? []} emptyHint="No one on the team is on leave this month." />
             )}
           </div>
         </div>
@@ -401,7 +439,7 @@ export const AttendancePage: React.FC = () => {
               <table className="w-full text-[0.8125rem]">
                 <thead className="bg-surface">
                   <tr>
-                    {(isAdmin ? ["Date", "Designer", "Status", "Reason", "Notes"] : ["Date", "Status", "Reason", "Notes"]).map((h) => (
+                    {(isAdmin ? ["Date", "Designer", "Status", "Reason", "Approval", "Notes"] : ["Date", "Status", "Reason", "Approval", "Notes"]).map((h) => (
                       <th key={h} className="border-b border-line px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
                         {h}
                       </th>
@@ -419,6 +457,25 @@ export const AttendancePage: React.FC = () => {
                         <Badge variant={STATUS_VARIANT[r.status]}>{ATTENDANCE_STATUS_LABELS[r.status]}</Badge>
                       </td>
                       <td className="border-b border-line px-4 py-3 text-faint-ink">{r.reason ? ATTENDANCE_REASON_LABELS[r.reason] : "—"}</td>
+                      <td className="border-b border-line px-4 py-3">
+                        {r.leaveApproval ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant={APPROVAL_VARIANT[r.leaveApproval]}>{LEAVE_APPROVAL_LABELS[r.leaveApproval]}</Badge>
+                            {isAdmin && r.leaveApproval === "pending" && (
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" aria-label="Approve leave" onClick={() => handleApprove(r, "approved")}>
+                                  <Check size={14} className="text-ok" />
+                                </Button>
+                                <Button variant="ghost" size="icon" aria-label="Reject leave" onClick={() => handleApprove(r, "rejected")}>
+                                  <XIcon size={14} className="text-bad" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-faint-ink">—</span>
+                        )}
+                      </td>
                       <td className="border-b border-line px-4 py-3 text-faint-ink">{r.notes ?? "—"}</td>
                     </tr>
                   ))}

@@ -131,15 +131,18 @@ service cloud.firestore {
     // admin-marked, not self-check-in). Designers can read only their own
     // full history, but everyone approved can see who's on leave -- see
     // the "leave" clauses below -- without seeing anyone else's
-    // present/late/absent details.
+    // present/late/absent details. Only *approved* leave is publicly
+    // visible this way -- a designer's own pending/rejected application
+    // stays visible only to themselves and admins until acted on.
     //
     // A designer's only write is applying for their own leave: create-only
-    // (never update, so they can't silently overwrite a day an admin
-    // already recorded), and only with status == "leave" -- see
-    // useAttendance.ts.
+    // (never update -- so they can't silently overwrite a day an admin
+    // already recorded, and can't approve their own request), only with
+    // status == "leave" -- see useAttendance.ts. Only admins can update a
+    // record afterwards, which is also how leaveApproval gets set.
     match /attendance/{id} {
-      allow get: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave");
-      allow list: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave");
+      allow get: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave" && resource.data.leaveApproval == "approved");
+      allow list: if isAdmin() || isOwnDesigner(resource.data.designerId) || (isApproved() && resource.data.status == "leave" && resource.data.leaveApproval == "approved");
       allow create: if isAdmin() ||
         (isApproved() && request.resource.data.designerId == request.auth.uid && request.resource.data.status == "leave");
       allow update: if isAdmin();

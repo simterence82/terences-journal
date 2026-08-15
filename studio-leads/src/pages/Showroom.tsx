@@ -24,12 +24,12 @@ import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Textarea } from "../components/Textarea";
 import { Select } from "../components/Select";
-import { Tabs } from "../components/Tabs";
 import { Badge } from "../components/Badge";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
+import { EventCalendar } from "../components/EventCalendar";
 
 const STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | "outline"> = {
   ok: "ok",
@@ -40,8 +40,13 @@ const STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | 
   resolved: "outline",
 };
 
-const EMPTY_FORM = { category: SHOWROOM_CATEGORIES[0] as ShowroomCategory, title: "", description: "", status: "ok" as ShowroomStatus, notes: "" };
+const EMPTY_FORM = { category: SHOWROOM_CATEGORIES[0] as ShowroomCategory, title: "", description: "", status: "ok" as ShowroomStatus, notes: "", scheduledAt: "" };
 const EMPTY_REPORT_FORM = { title: "", description: "", notes: "" };
+
+/** Only aircon_servicing items marked "servicing_scheduled" carry a date/time. */
+function needsSchedule(category: ShowroomCategory, status: ShowroomStatus): boolean {
+  return category === "aircon_servicing" && status === "servicing_scheduled";
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
@@ -104,8 +109,19 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
       toast.error("Title is required");
       return;
     }
+    if (needsSchedule(form.category, form.status) && !form.scheduledAt) {
+      toast.error("Enter the servicing date and time");
+      return;
+    }
     createMutation.mutate(
-      { category: form.category, title: form.title, description: form.description || null, status: form.status, notes: form.notes || null },
+      {
+        category: form.category,
+        title: form.title,
+        description: form.description || null,
+        status: form.status,
+        notes: form.notes || null,
+        scheduledAt: needsSchedule(form.category, form.status) ? form.scheduledAt : null,
+      },
       {
         onSuccess: () => {
           toast.success("Added to showroom tracker");
@@ -119,14 +135,33 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
 
   const openEdit = (item: ShowroomItem) => {
     setEditing(item);
-    setEditForm({ category: item.category, title: item.title, description: item.description ?? "", status: item.status, notes: item.notes ?? "" });
+    setEditForm({
+      category: item.category,
+      title: item.title,
+      description: item.description ?? "",
+      status: item.status,
+      notes: item.notes ?? "",
+      scheduledAt: item.scheduledAt ?? "",
+    });
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editing) return;
+    if (needsSchedule(editForm.category, editForm.status) && !editForm.scheduledAt) {
+      toast.error("Enter the servicing date and time");
+      return;
+    }
     updateMutation.mutate(
-      { id: editing.id, category: editForm.category, title: editForm.title, description: editForm.description || null, status: editForm.status, notes: editForm.notes || null },
+      {
+        id: editing.id,
+        category: editForm.category,
+        title: editForm.title,
+        description: editForm.description || null,
+        status: editForm.status,
+        notes: editForm.notes || null,
+        scheduledAt: needsSchedule(editForm.category, editForm.status) ? editForm.scheduledAt : null,
+      },
       {
         onSuccess: () => {
           toast.success("Updated");
@@ -138,6 +173,14 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
   };
 
   const quickSetStatus = (item: ShowroomItem, status: ShowroomStatus) => {
+    // Scheduling needs a date/time, which the quick-select on the card can't
+    // capture -- send the admin to the full edit dialog for that instead.
+    if (needsSchedule(item.category, status) && !item.scheduledAt) {
+      setEditing(item);
+      setEditForm({ category: item.category, title: item.title, description: item.description ?? "", status, notes: item.notes ?? "", scheduledAt: "" });
+      toast("Enter the servicing date and time to schedule this");
+      return;
+    }
     updateMutation.mutate({ id: item.id, status }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update item") });
   };
 
@@ -151,6 +194,25 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
 
   const activeCategory = tab === "overview" ? null : tab;
   const categoryItems = activeCategory ? items.filter((i) => i.category === activeCategory) : [];
+  const servicingEvents = useMemo(
+    () =>
+      activeCategory === "aircon_servicing"
+        ? categoryItems
+            .filter((i): i is ShowroomItem & { scheduledAt: string } => !!i.scheduledAt)
+            .map((i) => ({
+              id: i.id,
+              date: i.scheduledAt.slice(0, 10),
+              title: i.title,
+              time: new Date(i.scheduledAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" }),
+            }))
+        : [],
+    [activeCategory, categoryItems]
+  );
+
+  const sidebarOptions: { value: string; label: string; count?: number }[] = [
+    { value: "overview", label: "Overview" },
+    ...SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c], count: items.filter((i) => i.category === c).length })),
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -159,16 +221,27 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
         <p className="mt-1 text-[0.9375rem] text-faint-ink">Stock, equipment, and issues at the showroom</p>
       </div>
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => setTab(v as AdminTab)}
-        options={[
-          { value: "overview", label: "Overview" },
-          ...SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c], count: items.filter((i) => i.category === c).length })),
-        ]}
-        className="flex-wrap"
-      />
+      <div className="flex flex-col gap-6 sm:flex-row">
+        <nav className="flex shrink-0 flex-row gap-1 overflow-x-auto sm:w-52 sm:flex-col sm:overflow-visible">
+          {sidebarOptions.map((opt) => {
+            const active = opt.value === tab;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setTab(opt.value as AdminTab)}
+                className={`flex shrink-0 items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+                  active ? "bg-[var(--brand-wash)] text-brand" : "text-faint-ink hover:bg-faint hover:text-ink"
+                }`}
+              >
+                <span>{opt.label}</span>
+                {typeof opt.count === "number" && <span className="text-xs opacity-70">{opt.count}</span>}
+              </button>
+            );
+          })}
+        </nav>
 
+        <div className="min-w-0 flex-1">
       {tab === "overview" ? (
         <div className="flex flex-col gap-6">
           {isLoading ? (
@@ -230,6 +303,10 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
             </Button>
           </div>
 
+          {activeCategory === "aircon_servicing" && (
+            <EventCalendar events={servicingEvents} emptyHint="Nothing scheduled yet." />
+          )}
+
           {isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
@@ -265,6 +342,11 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
                       {item.reportedByName ?? "Studio"} · {formatDate(item.createdAt)}
                     </span>
                   </div>
+                  {item.scheduledAt && (
+                    <p className="rounded-lg bg-[var(--accent-wash)] px-3 py-2 text-xs font-medium text-accent">
+                      Scheduled: {new Date(item.scheduledAt).toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  )}
                   {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
                 </div>
               ))}
@@ -272,6 +354,8 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
           )}
         </div>
       )}
+        </div>
+      </div>
 
       <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
         <DialogHeader>
@@ -290,6 +374,17 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
               <Select value={form.status} onValueChange={(v) => setForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
             </div>
           </div>
+          {needsSchedule(form.category, form.status) && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-ink">Servicing Date &amp; Time *</label>
+              <Input
+                type="datetime-local"
+                value={form.scheduledAt}
+                onChange={(e) => setForm((p) => ({ ...p, scheduledAt: e.target.value }))}
+                required
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
             <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Mineral water running low" required />
@@ -325,6 +420,17 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
               <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
             </div>
           </div>
+          {needsSchedule(editForm.category, editForm.status) && (
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-ink">Servicing Date &amp; Time *</label>
+              <Input
+                type="datetime-local"
+                value={editForm.scheduledAt}
+                onChange={(e) => setEditForm((p) => ({ ...p, scheduledAt: e.target.value }))}
+                required
+              />
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
             <Input value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} required />

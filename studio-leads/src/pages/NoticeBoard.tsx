@@ -7,7 +7,6 @@ import {
   useDeleteAnnouncement,
   useUpdateAnnouncement,
 } from "../hooks/useAnnouncements";
-import { useLeaveCalendarList } from "../hooks/useAttendance";
 import { useAuth } from "../lib/AuthContext";
 import { isAdminRole, type Announcement } from "../lib/types";
 import { Button } from "../components/Button";
@@ -19,7 +18,6 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/D
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
-import { LeaveCalendar } from "../components/LeaveCalendar";
 
 const EMPTY_FORM = { title: "", body: "", pinned: false };
 
@@ -33,7 +31,6 @@ export const NoticeBoardPage: React.FC = () => {
   const isAdmin = !!currentUser && isAdminRole(currentUser.role);
 
   const listQuery = useAnnouncementsList();
-  const leaveQuery = useLeaveCalendarList();
   const createMutation = useCreateAnnouncement();
   const updateMutation = useUpdateAnnouncement();
   const deleteMutation = useDeleteAnnouncement();
@@ -112,18 +109,6 @@ export const NoticeBoardPage: React.FC = () => {
           <Button onClick={() => setIsAddOpen(true)}>
             <Plus size={16} /> New Announcement
           </Button>
-        )}
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <div>
-          <h2 className="font-display text-lg font-semibold text-ink">Team Away Calendar</h2>
-          <p className="text-[0.8125rem] text-faint-ink">Who's out, at a glance -- for planning cover and client meetings.</p>
-        </div>
-        {leaveQuery.isLoading ? (
-          <Skeleton style={{ height: 220 }} />
-        ) : (
-          <LeaveCalendar records={leaveQuery.data ?? []} emptyHint="No one on the team is on leave this month." />
         )}
       </div>
 

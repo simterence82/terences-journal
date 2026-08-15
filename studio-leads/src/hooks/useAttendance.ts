@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
+import { collection, doc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
-import { isAdminRole, type AttendanceReason, type AttendanceRecord, type AttendanceStatus, type Viewer } from "../lib/types";
+import { isAdminRole, type AttendanceReason, type AttendanceRecord, type AttendanceStatus, type LeaveApprovalStatus, type Viewer } from "../lib/types";
 
 const COLLECTION = "attendance";
 
@@ -17,6 +17,7 @@ function toAttendance(id: string, data: Record<string, any>): AttendanceRecord {
     notes: data.notes ?? null,
     markedBy: data.markedBy ?? null,
     markedAt: toIso(data.markedAt),
+    leaveApproval: data.leaveApproval ?? null,
   };
 }
 
@@ -43,14 +44,19 @@ export const useAttendanceList = (viewer: Viewer | null) =>
 /**
  * Every approved user (any role) can see who's on leave company-wide, even
  * though they still can't see anyone else's present/late/absent records --
- * see firestore.rules. The query itself must filter on status=="leave" for
- * the list rule to be provable.
+ * see firestore.rules. Only *approved* leave shows here -- a designer's
+ * pending or rejected application stays invisible to everyone but
+ * themselves and admins until an admin acts on it. The query itself must
+ * filter on both fields for the list rule to be provable (Firestore may
+ * prompt to create a composite index for this pair on first deploy).
  */
 export const useLeaveCalendarList = () =>
   useQuery({
     queryKey: ["attendance", "leaveCalendar"],
     queryFn: async () => {
-      const snap = await getDocs(query(collection(db, COLLECTION), where("status", "==", "leave")));
+      const snap = await getDocs(
+        query(collection(db, COLLECTION), where("status", "==", "leave"), where("leaveApproval", "==", "approved"))
+      );
       return snap.docs.map((d) => toAttendance(d.id, d.data()));
     },
   });
@@ -62,6 +68,9 @@ export interface MarkAttendanceInput {
   status: AttendanceStatus;
   reason: AttendanceReason | null;
   notes: string | null;
+  /** "approved" when an admin marks directly; "pending" when a designer
+      self-applies (see Attendance.tsx) -- null for non-"leave" statuses. */
+  leaveApproval: LeaveApprovalStatus | null;
 }
 
 /**
@@ -84,9 +93,21 @@ export const useMarkAttendance = () => {
         status: input.status,
         reason: input.status === "present" ? null : input.reason,
         notes: input.notes,
+        leaveApproval: input.leaveApproval,
         markedBy: auth.currentUser?.uid ?? null,
         markedAt: serverTimestamp(),
       });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
+  });
+};
+
+/** Admin/super admin approving or rejecting a designer's pending leave application. */
+export const useSetLeaveApproval = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, approval }: { id: string; approval: "approved" | "rejected" }) => {
+      await updateDoc(doc(db, COLLECTION, id), { leaveApproval: approval });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["attendance"] }),
   });
