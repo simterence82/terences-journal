@@ -18,6 +18,7 @@ import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 import { StatusBadge } from "../components/StatusBadge";
 import { Badge } from "../components/Badge";
+import { Checkbox } from "../components/Checkbox";
 import {
   CLOSED_LEAD_STATUSES,
   FOLLOW_UP_METHODS,
@@ -592,24 +593,20 @@ const LeadFullDetailDialog: React.FC<{
             )}
           </div>
           <div className="flex items-center gap-5 text-[0.8125rem]">
-            <label className="flex items-center gap-2 font-medium text-ink">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-line accent-[var(--pop)]"
-                checked={status === "signed"}
-                onChange={(e) => setStatus(e.target.checked ? "signed" : "follow_up")}
-              />
+            <Checkbox
+              className="font-medium text-ink"
+              checked={status === "signed"}
+              onChange={(checked) => setStatus(checked ? "signed" : "follow_up")}
+            >
               Signed
-            </label>
-            <label className="flex items-center gap-2 font-medium text-ink">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-line accent-[var(--pop)]"
-                checked={status === "rejected"}
-                onChange={(e) => setStatus(e.target.checked ? "rejected" : "follow_up")}
-              />
+            </Checkbox>
+            <Checkbox
+              className="font-medium text-ink"
+              checked={status === "rejected"}
+              onChange={(checked) => setStatus(checked ? "rejected" : "follow_up")}
+            >
               Rejected
-            </label>
+            </Checkbox>
             <span className="text-faint-ink">Check, then Save Changes -- no follow-up note required.</span>
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -641,24 +638,20 @@ const LeadFullDetailDialog: React.FC<{
                 required
               />
               <div className="flex items-center gap-5 text-[0.8125rem]">
-                <label className="flex items-center gap-2 font-medium text-ink">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-line accent-[var(--pop)]"
-                    checked={gstApplicable === true}
-                    onChange={(e) => setGstApplicable(e.target.checked ? true : null)}
-                  />
+                <Checkbox
+                  className="font-medium text-ink"
+                  checked={gstApplicable === true}
+                  onChange={(checked) => setGstApplicable(checked ? true : null)}
+                >
                   With GST
-                </label>
-                <label className="flex items-center gap-2 font-medium text-ink">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-line accent-[var(--pop)]"
-                    checked={gstApplicable === false}
-                    onChange={(e) => setGstApplicable(e.target.checked ? false : null)}
-                  />
+                </Checkbox>
+                <Checkbox
+                  className="font-medium text-ink"
+                  checked={gstApplicable === false}
+                  onChange={(checked) => setGstApplicable(checked ? false : null)}
+                >
                   No GST
-                </label>
+                </Checkbox>
               </div>
             </div>
           )}

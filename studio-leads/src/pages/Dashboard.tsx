@@ -119,7 +119,7 @@ export const DashboardPage: React.FC = () => {
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">Leave Calendar</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">Away Calendar</h2>
           <Link to="/attendance" className="text-[0.8125rem] text-brand hover:underline">
             {isAdmin ? "Go to Attendance" : "Apply for leave"}
           </Link>

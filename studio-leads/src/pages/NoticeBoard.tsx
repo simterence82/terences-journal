@@ -14,6 +14,7 @@ import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Textarea } from "../components/Textarea";
 import { Badge } from "../components/Badge";
+import { Checkbox } from "../components/Checkbox";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
@@ -116,7 +117,7 @@ export const NoticeBoardPage: React.FC = () => {
 
       <div className="flex flex-col gap-3">
         <div>
-          <h2 className="font-display text-lg font-semibold text-ink">Team Leave Calendar</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">Team Away Calendar</h2>
           <p className="text-[0.8125rem] text-faint-ink">Who's out, at a glance -- for planning cover and client meetings.</p>
         </div>
         {leaveQuery.isLoading ? (
@@ -180,15 +181,9 @@ export const NoticeBoardPage: React.FC = () => {
             <label className="text-[0.8125rem] font-medium text-ink">Message *</label>
             <Textarea rows={4} value={form.body} onChange={(e) => setForm((p) => ({ ...p, body: e.target.value }))} required />
           </div>
-          <label className="flex items-center gap-2 text-[0.8125rem] font-medium text-ink">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-line accent-[var(--pop)]"
-              checked={form.pinned}
-              onChange={(e) => setForm((p) => ({ ...p, pinned: e.target.checked }))}
-            />
+          <Checkbox className="text-[0.8125rem] font-medium text-ink" checked={form.pinned} onChange={(checked) => setForm((p) => ({ ...p, pinned: checked }))}>
             Pin to top
-          </label>
+          </Checkbox>
           <DialogFooter>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? "Posting..." : "Post Announcement"}
@@ -210,15 +205,9 @@ export const NoticeBoardPage: React.FC = () => {
             <label className="text-[0.8125rem] font-medium text-ink">Message *</label>
             <Textarea rows={4} value={editForm.body} onChange={(e) => setEditForm((p) => ({ ...p, body: e.target.value }))} required />
           </div>
-          <label className="flex items-center gap-2 text-[0.8125rem] font-medium text-ink">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-line accent-[var(--pop)]"
-              checked={editForm.pinned}
-              onChange={(e) => setEditForm((p) => ({ ...p, pinned: e.target.checked }))}
-            />
+          <Checkbox className="text-[0.8125rem] font-medium text-ink" checked={editForm.pinned} onChange={(checked) => setEditForm((p) => ({ ...p, pinned: checked }))}>
             Pin to top
-          </label>
+          </Checkbox>
           <DialogFooter>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
