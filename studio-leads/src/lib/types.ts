@@ -227,9 +227,15 @@ export const SHOWROOM_CATEGORY_LABELS: Record<ShowroomCategory, string> = {
   pantry_supplies: "Pantry Supplies",
   aircon_servicing: "Aircon & Servicing",
   faulty_report: "Faulty / Report Issue",
-  new_materials: "New Materials",
+  new_materials: "Materials and Samples",
   other: "Other",
 };
+
+// Physical areas an Aircon & Servicing item can be tagged against -- a
+// service call can cover more than one, hence a checklist rather than a
+// single select. Only meaningful for category "aircon_servicing".
+export const SERVICE_AREAS = ["Showroom Entrance", "Dining Area", "Designer Room", "My Office"] as const;
+export type ServiceArea = (typeof SERVICE_AREAS)[number];
 
 export const SHOWROOM_STATUSES = ["ok", "low_stock", "needs_attention", "faulty", "servicing_needed", "servicing_scheduled", "resolved"] as const;
 export type ShowroomStatus = (typeof SHOWROOM_STATUSES)[number];
@@ -271,4 +277,7 @@ export interface ShowroomItem {
   // with status == "servicing_scheduled" -- drives the servicing calendar
   // on that category's page. Null otherwise.
   scheduledAt: string | null;
+  // Areas a servicing call covers. Only meaningful for category ==
+  // "aircon_servicing"; empty for every other category.
+  areas: ServiceArea[];
 }

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, PackageX, Plus, Sparkles, Store, Trash2, Wrench, Pencil, LayoutGrid } from "lucide-react";
+import { AlertTriangle, CheckCircle2, PackageX, Plus, Sparkles, Trash2, Wrench, Pencil, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import {
   useShowroomItemsList,
@@ -10,12 +10,14 @@ import {
 import { useAuth } from "../lib/AuthContext";
 import {
   AIRCON_ADD_STATUSES,
+  SERVICE_AREAS,
   SHOWROOM_CATEGORIES,
   SHOWROOM_CATEGORY_LABELS,
   SHOWROOM_STATUSES,
   SHOWROOM_STATUS_LABELS,
   OPEN_SHOWROOM_STATUSES,
   isAdminRole,
+  type ServiceArea,
   type ShowroomCategory,
   type ShowroomItem,
   type ShowroomStatus,
@@ -26,6 +28,7 @@ import { Input } from "../components/Input";
 import { Textarea } from "../components/Textarea";
 import { Select } from "../components/Select";
 import { Tabs } from "../components/Tabs";
+import { Checkbox } from "../components/Checkbox";
 import { Badge } from "../components/Badge";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
@@ -43,17 +46,115 @@ const STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | 
   resolved: "outline",
 };
 
-const EMPTY_FORM = { category: SHOWROOM_CATEGORIES[0] as ShowroomCategory, title: "", description: "", status: "ok" as ShowroomStatus, notes: "", scheduledAt: "" };
-const EMPTY_REPORT_FORM = { title: "", description: "", notes: "" };
+const EMPTY_FORM = {
+  category: SHOWROOM_CATEGORIES[0] as ShowroomCategory,
+  title: "",
+  description: "",
+  status: "ok" as ShowroomStatus,
+  notes: "",
+  scheduledAt: "",
+  areas: [] as ServiceArea[],
+};
 
 /** Only aircon_servicing items marked "servicing_scheduled" carry a date/time. */
 function needsSchedule(category: ShowroomCategory, status: ShowroomStatus): boolean {
   return category === "aircon_servicing" && status === "servicing_scheduled";
 }
 
+function isAircon(category: ShowroomCategory): boolean {
+  return category === "aircon_servicing";
+}
+
+function splitScheduledAt(value: string): { date: string; time: string } {
+  const [date = "", time = ""] = value.split("T");
+  return { date, time };
+}
+
+function isCompleteSchedule(value: string): boolean {
+  const { date, time } = splitScheduledAt(value);
+  return !!date && !!time;
+}
+
+function todayDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" });
 }
+
+function formatScheduled(value: string): string {
+  return new Date(value).toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+// Segregates every category's items into three simple buckets so each
+// category page can be filtered by "what state is this in" -- Scheduled
+// only ever has anything in it for Aircon & Servicing (the only category
+// with a date/time), so it's hidden elsewhere.
+type StatusGroup = "open" | "scheduled" | "resolved";
+
+const STATUS_GROUP_LABELS: Record<StatusGroup, string> = {
+  open: "Needs Action",
+  scheduled: "Scheduled",
+  resolved: "Resolved",
+};
+
+function statusGroup(status: ShowroomStatus): StatusGroup {
+  if (status === "servicing_scheduled") return "scheduled";
+  if (status === "ok" || status === "resolved") return "resolved";
+  return "open";
+}
+
+const QUICK_TIME_SLOTS = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00"];
+
+/** Date + time entry for scheduling a servicing call -- manual keying via
+    native date/time inputs (forced 24-hour with lang="en-GB"), plus a row
+    of one-click common slots. */
+const ScheduleField: React.FC<{ value: string; onChange: (value: string) => void }> = ({ value, onChange }) => {
+  const { date, time } = splitScheduledAt(value);
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-[0.8125rem] font-medium text-ink">Servicing Date &amp; Time *</label>
+      <div className="grid grid-cols-2 gap-2">
+        <Input type="date" value={date} onChange={(e) => onChange(`${e.target.value}T${time}`)} required />
+        <Input type="time" lang="en-GB" value={time} onChange={(e) => onChange(`${date}T${e.target.value}`)} required />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {QUICK_TIME_SLOTS.map((slot) => (
+          <button
+            key={slot}
+            type="button"
+            onClick={() => onChange(`${date || todayDateString()}T${slot}`)}
+            className={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${
+              time === slot ? "border-brand bg-[var(--brand-wash)] text-brand" : "border-line text-faint-ink hover:text-ink"
+            }`}
+          >
+            {slot}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/** Areas an Aircon & Servicing call covers -- a checklist, since a single
+    visit can cover more than one area. */
+const AreaChecklist: React.FC<{ value: ServiceArea[]; onChange: (value: ServiceArea[]) => void }> = ({ value, onChange }) => (
+  <div className="flex flex-col gap-2">
+    <label className="text-[0.8125rem] font-medium text-ink">Areas to Service</label>
+    <div className="flex flex-wrap gap-x-4 gap-y-2">
+      {SERVICE_AREAS.map((area) => (
+        <Checkbox
+          key={area}
+          checked={value.includes(area)}
+          onChange={(checked) => onChange(checked ? [...value, area] : value.filter((a) => a !== area))}
+        >
+          <span className="text-sm text-ink">{area}</span>
+        </Checkbox>
+      ))}
+    </div>
+  </div>
+);
 
 export const ShowroomPage: React.FC = () => {
   const { authState } = useAuth();
@@ -63,27 +164,34 @@ export const ShowroomPage: React.FC = () => {
   const listQuery = useShowroomItemsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const items = listQuery.data ?? [];
 
-  return isAdmin ? <AdminShowroomView items={items} isLoading={listQuery.isLoading} /> : <DesignerIssueReportView items={items} isLoading={listQuery.isLoading} />;
+  return <ShowroomView items={items} isLoading={listQuery.isLoading} isAdmin={isAdmin} />;
 };
 
 type AdminTab = "overview" | ShowroomCategory;
 
 /**
- * Super admin / admin: each category is its own dedicated page -- picking
- * a tab swaps the whole page content, not just a filter on a shared list.
- * "Overview" is a separate landing tab with the cross-category dashboard.
+ * Every category is visible studio-wide (enforced in firestore.rules, not
+ * just here). Everyone can browse and add items; only either admin tier
+ * can edit fields, change to any status, or delete -- a designer's only
+ * action on an existing item is marking it resolved once it's done.
  */
-const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }> = ({ items, isLoading }) => {
+const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmin: boolean }> = ({ items, isLoading, isAdmin }) => {
   const createMutation = useCreateShowroomItem();
   const updateMutation = useUpdateShowroomItem();
   const deleteMutation = useDeleteShowroomItem();
   const deleteTarget = useConfirmDialog<ShowroomItem>();
 
   const [tab, setTab] = useState<AdminTab>("overview");
+  const [statusFilter, setStatusFilter] = useState<StatusGroup>("open");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<ShowroomItem | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+
+  const handleTabChange = (v: string) => {
+    setTab(v as AdminTab);
+    setStatusFilter("open");
+  };
 
   const counts = useMemo(
     () => ({
@@ -109,22 +217,24 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.title.trim()) {
+    const aircon = isAircon(form.category);
+    if (!aircon && !form.title.trim()) {
       toast.error("Title is required");
       return;
     }
-    if (needsSchedule(form.category, form.status) && !form.scheduledAt) {
+    if (needsSchedule(form.category, form.status) && !isCompleteSchedule(form.scheduledAt)) {
       toast.error("Enter the servicing date and time");
       return;
     }
     createMutation.mutate(
       {
         category: form.category,
-        title: form.title,
-        description: form.description || null,
+        title: aircon ? (form.areas.length ? form.areas.join(", ") : "Aircon & Servicing") : form.title,
+        description: aircon ? null : form.description || null,
         status: form.status,
         notes: form.notes || null,
         scheduledAt: needsSchedule(form.category, form.status) ? form.scheduledAt : null,
+        areas: aircon ? form.areas : [],
       },
       {
         onSuccess: () => {
@@ -146,13 +256,19 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
       status: item.status,
       notes: item.notes ?? "",
       scheduledAt: item.scheduledAt ?? "",
+      areas: item.areas,
     });
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editing) return;
-    if (needsSchedule(editForm.category, editForm.status) && !editForm.scheduledAt) {
+    const aircon = isAircon(editForm.category);
+    if (!aircon && !editForm.title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    if (needsSchedule(editForm.category, editForm.status) && !isCompleteSchedule(editForm.scheduledAt)) {
       toast.error("Enter the servicing date and time");
       return;
     }
@@ -160,11 +276,12 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
       {
         id: editing.id,
         category: editForm.category,
-        title: editForm.title,
-        description: editForm.description || null,
+        title: aircon ? (editForm.areas.length ? editForm.areas.join(", ") : "Aircon & Servicing") : editForm.title,
+        description: aircon ? null : editForm.description || null,
         status: editForm.status,
         notes: editForm.notes || null,
         scheduledAt: needsSchedule(editForm.category, editForm.status) ? editForm.scheduledAt : null,
+        areas: aircon ? editForm.areas : [],
       },
       {
         onSuccess: () => {
@@ -181,11 +298,21 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
     // capture -- send the admin to the full edit dialog for that instead.
     if (needsSchedule(item.category, status) && !item.scheduledAt) {
       setEditing(item);
-      setEditForm({ category: item.category, title: item.title, description: item.description ?? "", status, notes: item.notes ?? "", scheduledAt: "" });
+      setEditForm({ category: item.category, title: item.title, description: item.description ?? "", status, notes: item.notes ?? "", scheduledAt: "", areas: item.areas });
       toast("Enter the servicing date and time to schedule this");
       return;
     }
     updateMutation.mutate({ id: item.id, status }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update item") });
+  };
+
+  const handleResolve = (item: ShowroomItem) => {
+    updateMutation.mutate(
+      { id: item.id, status: "resolved" },
+      {
+        onSuccess: () => toast.success("Marked resolved"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update item"),
+      }
+    );
   };
 
   const handleDelete = async () => {
@@ -198,6 +325,10 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
 
   const activeCategory = tab === "overview" ? null : tab;
   const categoryItems = activeCategory ? items.filter((i) => i.category === activeCategory) : [];
+  const visibleCategoryItems = categoryItems.filter((i) => statusGroup(i.status) === statusFilter);
+  const statusGroupOptions: StatusGroup[] = activeCategory === "aircon_servicing" ? ["open", "scheduled", "resolved"] : ["open", "resolved"];
+  const addLabel = activeCategory === "new_materials" ? "Request for New Materials" : `Add to ${SHOWROOM_CATEGORY_LABELS[activeCategory ?? "other"]}`;
+
   // Every aircon_servicing item shows on the calendar, not just scheduled
   // ones -- unscheduled items (servicing_needed/faulty/needs_attention)
   // anchor on their reported date so admins see the whole backlog at a
@@ -209,7 +340,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
             id: i.id,
             date: (i.scheduledAt ?? i.createdAt).slice(0, 10),
             title: `${i.title} — ${SHOWROOM_STATUS_LABELS[i.status]}`,
-            time: i.scheduledAt ? new Date(i.scheduledAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" }) : null,
+            time: i.scheduledAt ? new Date(i.scheduledAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", hour12: false }) : null,
           }))
         : [],
     [activeCategory, categoryItems]
@@ -224,7 +355,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
 
       <Tabs
         value={tab}
-        onValueChange={(v) => setTab(v as AdminTab)}
+        onValueChange={handleTabChange}
         options={[
           { value: "overview", label: "Overview" },
           ...SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c], count: items.filter((i) => i.category === c).length })),
@@ -269,7 +400,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
                   </thead>
                   <tbody>
                     {openItems.map((item) => (
-                      <tr key={item.id} className="cursor-pointer hover:bg-surface" onClick={() => setTab(item.category)}>
+                      <tr key={item.id} className="cursor-pointer hover:bg-surface" onClick={() => handleTabChange(item.category)}>
                         <td className="border-b border-line px-4 py-3 font-medium text-ink">{item.title}</td>
                         <td className="border-b border-line px-4 py-3 text-faint-ink">{SHOWROOM_CATEGORY_LABELS[item.category]}</td>
                         <td className="border-b border-line px-4 py-3">
@@ -289,7 +420,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-display text-xl font-semibold text-ink">{SHOWROOM_CATEGORY_LABELS[activeCategory!]}</h2>
             <Button onClick={() => openAddDialog(activeCategory!)}>
-              <Plus size={16} /> Add to {SHOWROOM_CATEGORY_LABELS[activeCategory!]}
+              <Plus size={16} /> {addLabel}
             </Button>
           </div>
 
@@ -297,35 +428,58 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
             <EventCalendar events={servicingEvents} emptyHint="Nothing reported or scheduled yet." />
           )}
 
+          <Tabs
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as StatusGroup)}
+            options={statusGroupOptions.map((g) => ({
+              value: g,
+              label: STATUS_GROUP_LABELS[g],
+              count: categoryItems.filter((i) => statusGroup(i.status) === g).length,
+            }))}
+          />
+
           {isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
                 <Skeleton key={i} style={{ height: 150 }} />
               ))}
             </div>
-          ) : categoryItems.length === 0 ? (
-            <EmptyState icon={<LayoutGrid size={28} />} message={`Nothing tracked under ${SHOWROOM_CATEGORY_LABELS[activeCategory!]} yet.`} />
+          ) : visibleCategoryItems.length === 0 ? (
+            <EmptyState icon={<LayoutGrid size={28} />} message={`Nothing in ${STATUS_GROUP_LABELS[statusFilter].toLowerCase()} for ${SHOWROOM_CATEGORY_LABELS[activeCategory!]} yet.`} />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {categoryItems.map((item) => (
+              {visibleCategoryItems.map((item) => (
                 <div key={item.id} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <span className="text-[0.9375rem] font-semibold text-ink">{item.title}</span>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit item">
-                        <Pencil size={16} />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(item)} aria-label="Delete item">
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit item">
+                          <Pencil size={16} />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(item)} aria-label="Delete item">
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   {item.description && <p className="text-[0.8125rem] leading-relaxed text-faint-ink">{item.description}</p>}
-                  <Select
-                    value={item.status}
-                    onValueChange={(v) => quickSetStatus(item, v as ShowroomStatus)}
-                    options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
-                  />
+                  {item.areas.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {item.areas.map((a) => (
+                        <Badge key={a} variant="outline">
+                          {a}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <Select
+                      value={item.status}
+                      onValueChange={(v) => quickSetStatus(item, v as ShowroomStatus)}
+                      options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
+                    />
+                  )}
                   <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-faint-ink">
                     <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
                     <span>
@@ -333,11 +487,14 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
                     </span>
                   </div>
                   {item.scheduledAt && (
-                    <p className="rounded-lg bg-[var(--accent-wash)] px-3 py-2 text-xs font-medium text-accent">
-                      Scheduled: {new Date(item.scheduledAt).toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                    </p>
+                    <p className="rounded-lg bg-[var(--accent-wash)] px-3 py-2 text-xs font-medium text-accent">Scheduled: {formatScheduled(item.scheduledAt)}</p>
                   )}
                   {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
+                  {!isAdmin && statusGroup(item.status) !== "resolved" && (
+                    <Button variant="soft" size="sm" onClick={() => handleResolve(item)} disabled={updateMutation.isPending}>
+                      <CheckCircle2 size={14} /> Mark Resolved
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
@@ -347,7 +504,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
 
       <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
         <DialogHeader>
-          <DialogTitle>{activeCategory ? `Add to ${SHOWROOM_CATEGORY_LABELS[activeCategory]}` : "Add Showroom Item"}</DialogTitle>
+          <DialogTitle>{activeCategory ? addLabel : "Add Showroom Item"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleCreate} className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -377,23 +534,23 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
               />
             </div>
           </div>
-          {needsSchedule(form.category, form.status) && (
-            <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Servicing Date &amp; Time *</label>
-              <Input
-                type="datetime-local"
-                value={form.scheduledAt}
-                onChange={(e) => setForm((p) => ({ ...p, scheduledAt: e.target.value }))}
-                required
-              />
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
-            <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Mineral water running low" required />
-          </div>
-          {!needsSchedule(form.category, form.status) && (
+          {isAircon(form.category) ? (
             <>
+              <AreaChecklist value={form.areas} onChange={(areas) => setForm((p) => ({ ...p, areas }))} />
+              {needsSchedule(form.category, form.status) && (
+                <ScheduleField value={form.scheduledAt} onChange={(v) => setForm((p) => ({ ...p, scheduledAt: v }))} />
+              )}
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
+                <Textarea rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Any extra detail, vendor contacted, etc." />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
+                <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Mineral water running low" required />
+              </div>
               <div className="flex flex-col gap-2">
                 <label className="text-[0.8125rem] font-medium text-ink">Description</label>
                 <Textarea rows={2} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
@@ -427,23 +584,23 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
               <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
             </div>
           </div>
-          {needsSchedule(editForm.category, editForm.status) && (
-            <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Servicing Date &amp; Time *</label>
-              <Input
-                type="datetime-local"
-                value={editForm.scheduledAt}
-                onChange={(e) => setEditForm((p) => ({ ...p, scheduledAt: e.target.value }))}
-                required
-              />
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
-            <Input value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} required />
-          </div>
-          {!needsSchedule(editForm.category, editForm.status) && (
+          {isAircon(editForm.category) ? (
             <>
+              <AreaChecklist value={editForm.areas} onChange={(areas) => setEditForm((p) => ({ ...p, areas }))} />
+              {needsSchedule(editForm.category, editForm.status) && (
+                <ScheduleField value={editForm.scheduledAt} onChange={(v) => setEditForm((p) => ({ ...p, scheduledAt: v }))} />
+              )}
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
+                <Textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
+                <Input value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} required />
+              </div>
               <div className="flex flex-col gap-2">
                 <label className="text-[0.8125rem] font-medium text-ink">Description</label>
                 <Textarea rows={2} value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
@@ -469,104 +626,6 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
         description={`"${deleteTarget.target?.title ?? ""}" will be removed from the showroom tracker.`}
         onConfirm={handleDelete}
       />
-    </div>
-  );
-};
-
-/**
- * Designer: scoped to the "faulty_report" category only (enforced by
- * firestore.rules, not just this UI) -- they can see what's been reported
- * and report new issues, but every other category and all status/edit
- * controls are admin-only. Only one category exists for them, so no tabs.
- */
-const DesignerIssueReportView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }> = ({ items, isLoading }) => {
-  const createMutation = useCreateShowroomItem();
-  const [isReportOpen, setIsReportOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_REPORT_FORM);
-
-  const resetForm = () => setForm(EMPTY_REPORT_FORM);
-
-  const handleReport = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.title.trim()) {
-      toast.error("Give it a short title");
-      return;
-    }
-    createMutation.mutate(
-      { category: "faulty_report", title: form.title, description: form.description || null, status: "needs_attention", notes: form.notes || null },
-      {
-        onSuccess: () => {
-          toast.success("Issue reported -- an admin will follow up");
-          resetForm();
-          setIsReportOpen(false);
-        },
-        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to report issue"),
-      }
-    );
-  };
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-semibold text-ink">Showroom</h1>
-          <p className="mt-1 text-[0.9375rem] text-faint-ink">Report anything faulty or that needs attention at the showroom</p>
-        </div>
-        <Button onClick={() => setIsReportOpen(true)}>
-          <Plus size={16} /> Report an Issue
-        </Button>
-      </div>
-
-      {isLoading ? (
-        <div className="flex flex-col gap-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} style={{ height: 100 }} />
-          ))}
-        </div>
-      ) : items.length === 0 ? (
-        <EmptyState icon={<Store size={28} />} message="No issues reported yet." />
-      ) : (
-        <div className="flex flex-col gap-4">
-          {items.map((item) => (
-            <div key={item.id} className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-5 shadow-sm">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[0.9375rem] font-semibold text-ink">{item.title}</span>
-                <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
-              </div>
-              {item.description && <p className="text-[0.8125rem] leading-relaxed text-faint-ink">{item.description}</p>}
-              <p className="text-xs text-faint-ink">
-                Reported by {item.reportedByName ?? "someone"} · {formatDate(item.createdAt)}
-              </p>
-              {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Dialog open={isReportOpen} onOpenChange={(open) => { setIsReportOpen(open); if (!open) resetForm(); }}>
-        <DialogHeader>
-          <DialogTitle>Report an Issue</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleReport} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">What's wrong? *</label>
-            <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Pendant light flickering in the kitchen display" required />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Details</label>
-            <Textarea rows={3} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} placeholder="Where exactly, since when, anything else worth knowing" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
-            <Textarea rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} />
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Reporting..." : "Report Issue"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </Dialog>
     </div>
   );
 };

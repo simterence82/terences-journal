@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { addDoc, collection, deleteDoc, doc, getDocs, query, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, serverTimestamp, updateDoc } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
-import { CLOSED_SHOWROOM_STATUSES, isAdminRole, type ShowroomCategory, type ShowroomItem, type ShowroomStatus, type Viewer } from "../lib/types";
+import { CLOSED_SHOWROOM_STATUSES, type ShowroomCategory, type ShowroomItem, type ShowroomStatus, type Viewer } from "../lib/types";
 
 const COLLECTION = "showroomItems";
 const KEY = ["showroomItems"] as const;
@@ -21,24 +21,18 @@ function toShowroomItem(id: string, data: Record<string, any>): ShowroomItem {
     updatedAt: toIso(data.updatedAt),
     resolvedAt: toIso(data.resolvedAt),
     scheduledAt: data.scheduledAt ?? null,
+    areas: data.areas ?? [],
   };
 }
 
-/**
- * Either admin tier sees every item. A designer's query is constrained to
- * where("category","==","faulty_report") -- required for firestore.rules'
- * list rule to allow the read at all, and matches the product decision
- * that designers only see/report issues, not the rest of the tracker.
- */
+/** Every approved user sees every category -- the whole tracker is visible
+    studio-wide; firestore.rules is what actually enforces who can write. */
 export const useShowroomItemsList = (viewer: Viewer | null) =>
   useQuery({
-    queryKey: [...KEY, viewer && isAdminRole(viewer.role) ? "all" : "faulty_report"],
+    queryKey: KEY,
     enabled: !!viewer,
     queryFn: async () => {
-      const q = isAdminRole(viewer!.role)
-        ? collection(db, COLLECTION)
-        : query(collection(db, COLLECTION), where("category", "==", "faulty_report"));
-      const snap = await getDocs(q);
+      const snap = await getDocs(collection(db, COLLECTION));
       const items = snap.docs.map((d) => toShowroomItem(d.id, d.data()));
       items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
       return items;
@@ -53,6 +47,8 @@ export interface ShowroomItemCreateInput {
   notes: string | null;
   /** Only meaningful for category "aircon_servicing" + status "servicing_scheduled". */
   scheduledAt?: string | null;
+  /** Only meaningful for category "aircon_servicing". */
+  areas?: ShowroomItem["areas"];
 }
 
 export const useCreateShowroomItem = () => {
@@ -81,6 +77,7 @@ export interface ShowroomItemUpdateInput {
   status?: ShowroomStatus;
   notes?: string | null;
   scheduledAt?: string | null;
+  areas?: ShowroomItem["areas"];
 }
 
 export const useUpdateShowroomItem = () => {

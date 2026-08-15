@@ -156,19 +156,20 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Showroom tracking (stock, aircon servicing, faulty reports, new
-    // materials): either admin tier sees and manages everything. Designers
-    // are scoped to the "faulty_report" category only -- they can see and
-    // report issues there, but can't touch any other category, and can't
-    // edit/delete anything at all (even their own reports), matching
-    // Leads' isOwnDesigner-style category scoping: the client must query
-    // with where("category","==","faulty_report") for a designer's list
-    // to be provable against this rule -- see useShowroom.ts.
+    // Showroom tracking (stock, aircon servicing, faulty reports, materials
+    // and samples): every approved user can see every category and raise
+    // items ("add a problem/request"), but only either admin tier can amend
+    // the contents (edit fields, change to any status, delete). A designer's
+    // only write to an existing item is a narrow "mark resolved" update --
+    // it may only flip status/resolvedAt/updatedAt, and only to "resolved".
     match /showroomItems/{id} {
-      allow get: if isAdmin() || (isApproved() && resource.data.category == "faulty_report");
-      allow list: if isAdmin() || (isApproved() && resource.data.category == "faulty_report");
-      allow create: if isAdmin() || (isApproved() && request.resource.data.category == "faulty_report");
-      allow update, delete: if isAdmin();
+      allow get, list: if isApproved();
+      allow create: if isApproved();
+      allow update: if isAdmin() ||
+        (isApproved() &&
+         request.resource.data.status == "resolved" &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "resolvedAt", "updatedAt"]));
+      allow delete: if isAdmin();
     }
   }
 }
