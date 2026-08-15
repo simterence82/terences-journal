@@ -207,6 +207,11 @@ export interface Announcement {
   createdByName: string | null;
   createdAt: string;
   updatedAt: string | null;
+  // When set, this announcement also shows on everyone's dashboard
+  // calendar -- left blank, it only ever appears on the Notice Board.
+  // "YYYY-MM-DD"; eventTime ("HH:mm") is optional even when a date is set.
+  eventDate: string | null;
+  eventTime: string | null;
 }
 
 // Showroom tracking (admin/super admin only): stock, equipment, and

@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, CalendarClock, Handshake, Megaphone, TrendingUp } from "lucide-react";
 import { useLeadsList } from "../hooks/useLeads";
 import { useAnnouncementsList } from "../hooks/useAnnouncements";
-import { useAttendanceList } from "../hooks/useAttendance";
+import { useLeaveCalendarList } from "../hooks/useAttendance";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
 import { CLOSED_LEAD_STATUSES, isAdminRole } from "../lib/types";
@@ -13,6 +13,7 @@ import { Badge } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 import { LeaveCalendar } from "../components/LeaveCalendar";
+import { EventCalendar } from "../components/EventCalendar";
 
 export const DashboardPage: React.FC = () => {
   const { authState } = useAuth();
@@ -21,10 +22,17 @@ export const DashboardPage: React.FC = () => {
 
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const announcementsQuery = useAnnouncementsList();
-  const attendanceQuery = useAttendanceList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
+  const leaveCalendarQuery = useLeaveCalendarList();
   const leads = leadsQuery.data ?? [];
-  const announcements = (announcementsQuery.data ?? []).slice(0, 3);
-  const attendance = attendanceQuery.data ?? [];
+  const allAnnouncements = announcementsQuery.data ?? [];
+  const announcements = allAnnouncements.slice(0, 3);
+  const eventAnnouncements = useMemo(
+    () =>
+      allAnnouncements
+        .filter((a) => a.eventDate)
+        .map((a) => ({ id: a.id, date: a.eventDate!, title: a.title, time: a.eventTime })),
+    [allAnnouncements]
+  );
   const today = todayDateString();
 
   const activeLeads = leads.filter((l) => !CLOSED_LEAD_STATUSES.includes(l.status));
@@ -124,14 +132,28 @@ export const DashboardPage: React.FC = () => {
             {isAdmin ? "Go to Attendance" : "Apply for leave"}
           </Link>
         </div>
-        {attendanceQuery.isLoading ? (
+        {leaveCalendarQuery.isLoading ? (
           <Skeleton style={{ height: 220 }} />
         ) : (
           <LeaveCalendar
-            records={attendance}
+            records={leaveCalendarQuery.data ?? []}
             showReasons
-            emptyHint={isAdmin ? "No one on the team has leave scheduled this month." : "You have no leave scheduled this month."}
+            emptyHint="No one on the team has leave scheduled this month."
           />
+        )}
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Upcoming Events</h2>
+          <Link to="/notice-board" className="text-[0.8125rem] text-brand hover:underline">
+            Go to Notice Board
+          </Link>
+        </div>
+        {announcementsQuery.isLoading ? (
+          <Skeleton style={{ height: 220 }} />
+        ) : (
+          <EventCalendar events={eventAnnouncements} emptyHint="No dated announcements this month." />
         )}
       </div>
 

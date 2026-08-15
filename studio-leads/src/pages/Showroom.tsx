@@ -48,8 +48,6 @@ const STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | 
 
 const EMPTY_FORM = {
   category: SHOWROOM_CATEGORIES[0] as ShowroomCategory,
-  title: "",
-  description: "",
   status: "ok" as ShowroomStatus,
   notes: "",
   scheduledAt: "",
@@ -63,6 +61,16 @@ function needsSchedule(category: ShowroomCategory, status: ShowroomStatus): bool
 
 function isAircon(category: ShowroomCategory): boolean {
   return category === "aircon_servicing";
+}
+
+// No category collects a title/description anymore -- Notes is the one
+// free-text field everywhere, so the card heading is derived from it (or
+// from the selected areas for Aircon & Servicing, which has no notes-first
+// concept since areas already identify the item).
+function deriveTitle(notes: string, fallback: string): string {
+  const firstLine = notes.trim().split("\n")[0]?.trim() ?? "";
+  if (!firstLine) return fallback;
+  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}…` : firstLine;
 }
 
 function splitScheduledAt(value: string): { date: string; time: string } {
@@ -217,22 +225,22 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    const aircon = isAircon(form.category);
-    if (!aircon && !form.title.trim()) {
-      toast.error("Title is required");
+    if (!form.notes.trim()) {
+      toast.error("Notes are required");
       return;
     }
     if (needsSchedule(form.category, form.status) && !isCompleteSchedule(form.scheduledAt)) {
       toast.error("Enter the servicing date and time");
       return;
     }
+    const aircon = isAircon(form.category);
     createMutation.mutate(
       {
         category: form.category,
-        title: aircon ? (form.areas.length ? form.areas.join(", ") : "Aircon & Servicing") : form.title,
-        description: aircon ? null : form.description || null,
+        title: aircon ? (form.areas.length ? form.areas.join(", ") : "Aircon & Servicing") : deriveTitle(form.notes, SHOWROOM_CATEGORY_LABELS[form.category]),
+        description: null,
         status: form.status,
-        notes: form.notes || null,
+        notes: form.notes,
         scheduledAt: needsSchedule(form.category, form.status) ? form.scheduledAt : null,
         areas: aircon ? form.areas : [],
       },
@@ -251,8 +259,6 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
     setEditing(item);
     setEditForm({
       category: item.category,
-      title: item.title,
-      description: item.description ?? "",
       status: item.status,
       notes: item.notes ?? "",
       scheduledAt: item.scheduledAt ?? "",
@@ -263,23 +269,22 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editing) return;
-    const aircon = isAircon(editForm.category);
-    if (!aircon && !editForm.title.trim()) {
-      toast.error("Title is required");
+    if (!editForm.notes.trim()) {
+      toast.error("Notes are required");
       return;
     }
     if (needsSchedule(editForm.category, editForm.status) && !isCompleteSchedule(editForm.scheduledAt)) {
       toast.error("Enter the servicing date and time");
       return;
     }
+    const aircon = isAircon(editForm.category);
     updateMutation.mutate(
       {
         id: editing.id,
         category: editForm.category,
-        title: aircon ? (editForm.areas.length ? editForm.areas.join(", ") : "Aircon & Servicing") : editForm.title,
-        description: aircon ? null : editForm.description || null,
+        title: aircon ? (editForm.areas.length ? editForm.areas.join(", ") : "Aircon & Servicing") : deriveTitle(editForm.notes, SHOWROOM_CATEGORY_LABELS[editForm.category]),
         status: editForm.status,
-        notes: editForm.notes || null,
+        notes: editForm.notes,
         scheduledAt: needsSchedule(editForm.category, editForm.status) ? editForm.scheduledAt : null,
         areas: aircon ? editForm.areas : [],
       },
@@ -298,7 +303,7 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
     // capture -- send the admin to the full edit dialog for that instead.
     if (needsSchedule(item.category, status) && !item.scheduledAt) {
       setEditing(item);
-      setEditForm({ category: item.category, title: item.title, description: item.description ?? "", status, notes: item.notes ?? "", scheduledAt: "", areas: item.areas });
+      setEditForm({ category: item.category, status, notes: item.notes ?? "", scheduledAt: "", areas: item.areas });
       toast("Enter the servicing date and time to schedule this");
       return;
     }
@@ -526,7 +531,7 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Status</label>
+              <label className="text-[0.8125rem] font-medium text-ink">Status *</label>
               <Select
                 value={form.status}
                 onValueChange={(v) => setForm((p) => ({ ...p, status: v as ShowroomStatus }))}
@@ -534,33 +539,14 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
               />
             </div>
           </div>
-          {isAircon(form.category) ? (
-            <>
-              <AreaChecklist value={form.areas} onChange={(areas) => setForm((p) => ({ ...p, areas }))} />
-              {needsSchedule(form.category, form.status) && (
-                <ScheduleField value={form.scheduledAt} onChange={(v) => setForm((p) => ({ ...p, scheduledAt: v }))} />
-              )}
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
-                <Textarea rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Any extra detail, vendor contacted, etc." />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
-                <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Mineral water running low" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Description</label>
-                <Textarea rows={2} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
-                <Textarea rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Any extra detail, vendor contacted, etc." />
-              </div>
-            </>
+          {isAircon(form.category) && <AreaChecklist value={form.areas} onChange={(areas) => setForm((p) => ({ ...p, areas }))} />}
+          {needsSchedule(form.category, form.status) && (
+            <ScheduleField value={form.scheduledAt} onChange={(v) => setForm((p) => ({ ...p, scheduledAt: v }))} />
           )}
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-ink">Notes *</label>
+            <Textarea rows={3} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="What's going on, any detail worth knowing" required />
+          </div>
           <DialogFooter>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? "Saving..." : "Add Item"}
@@ -580,37 +566,18 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
               <Select value={editForm.category} onValueChange={(v) => setEditForm((p) => ({ ...p, category: v as ShowroomCategory }))} options={SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c] }))} />
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Status</label>
+              <label className="text-[0.8125rem] font-medium text-ink">Status *</label>
               <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
             </div>
           </div>
-          {isAircon(editForm.category) ? (
-            <>
-              <AreaChecklist value={editForm.areas} onChange={(areas) => setEditForm((p) => ({ ...p, areas }))} />
-              {needsSchedule(editForm.category, editForm.status) && (
-                <ScheduleField value={editForm.scheduledAt} onChange={(v) => setEditForm((p) => ({ ...p, scheduledAt: v }))} />
-              )}
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
-                <Textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} />
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
-                <Input value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Description</label>
-                <Textarea rows={2} value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
-                <Textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} />
-              </div>
-            </>
+          {isAircon(editForm.category) && <AreaChecklist value={editForm.areas} onChange={(areas) => setEditForm((p) => ({ ...p, areas }))} />}
+          {needsSchedule(editForm.category, editForm.status) && (
+            <ScheduleField value={editForm.scheduledAt} onChange={(v) => setEditForm((p) => ({ ...p, scheduledAt: v }))} />
           )}
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-ink">Notes *</label>
+            <Textarea rows={3} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} required />
+          </div>
           <DialogFooter>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Saving..." : "Save Changes"}

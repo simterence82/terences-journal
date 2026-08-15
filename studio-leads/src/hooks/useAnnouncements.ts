@@ -17,6 +17,8 @@ function toAnnouncement(id: string, data: Record<string, any>): Announcement {
     createdByName: data.createdByName ?? null,
     createdAt: toIso(data.createdAt) ?? new Date(0).toISOString(),
     updatedAt: toIso(data.updatedAt),
+    eventDate: data.eventDate ?? null,
+    eventTime: data.eventTime ?? null,
   };
 }
 
@@ -39,6 +41,8 @@ export interface AnnouncementCreateInput {
   title: string;
   body: string;
   pinned: boolean;
+  eventDate?: string | null;
+  eventTime?: string | null;
 }
 
 export const useCreateAnnouncement = () => {
@@ -50,6 +54,8 @@ export const useCreateAnnouncement = () => {
         title: input.title,
         body: input.body,
         pinned: input.pinned,
+        eventDate: input.eventDate ?? null,
+        eventTime: input.eventTime ?? null,
         createdBy: currentUser?.uid ?? null,
         createdByName: currentUser?.displayName ?? null,
         createdAt: serverTimestamp(),
@@ -65,6 +71,8 @@ export interface AnnouncementUpdateInput {
   title?: string;
   body?: string;
   pinned?: boolean;
+  eventDate?: string | null;
+  eventTime?: string | null;
 }
 
 export const useUpdateAnnouncement = () => {

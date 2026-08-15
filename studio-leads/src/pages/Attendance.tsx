@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { CalendarCheck, Check, ChevronLeft, ChevronRight, ClipboardList, Download, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useAttendanceList, useLeaveCalendarList, useMarkAttendance, useSetLeaveApproval } from "../hooks/useAttendance";
+import { useAttendanceList, useMarkAttendance, useSetLeaveApproval } from "../hooks/useAttendance";
 import { useDesignersList } from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
@@ -102,7 +103,6 @@ export const AttendancePage: React.FC = () => {
   const designersQuery = useDesignersList();
   const markMutation = useMarkAttendance();
   const approvalMutation = useSetLeaveApproval();
-  const leaveCalendarQuery = useLeaveCalendarList();
 
   const [tab, setTab] = useState<Tab>(isAdmin ? "mark" : "leave");
   const [selectedDate, setSelectedDate] = useState(todayDateString());
@@ -421,14 +421,16 @@ export const AttendancePage: React.FC = () => {
 
           <div className="flex flex-col gap-3">
             <div>
-              <h3 className="font-display text-base font-semibold text-ink">Team Away Calendar</h3>
-              <p className="text-[0.8125rem] text-faint-ink">Who's out, at a glance -- once their leave is approved.</p>
+              <h3 className="font-display text-base font-semibold text-ink">Your Leave Calendar</h3>
+              <p className="text-[0.8125rem] text-faint-ink">
+                Your own applied and approved leave, at a glance. See everyone else's on the{" "}
+                <Link to="/" className="text-brand hover:underline">
+                  Dashboard's Away Calendar
+                </Link>
+                .
+              </p>
             </div>
-            {leaveCalendarQuery.isLoading ? (
-              <Skeleton style={{ height: 220 }} />
-            ) : (
-              <LeaveCalendar records={leaveCalendarQuery.data ?? []} emptyHint="No one on the team is on leave this month." />
-            )}
+            <LeaveCalendar records={records.filter((r) => r.status === "leave")} showReasons emptyHint="You have no leave applied this month." />
           </div>
         </div>
       )}
