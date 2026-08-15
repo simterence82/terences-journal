@@ -31,13 +31,15 @@ export const DashboardPage: React.FC = () => {
   const showroomItems = showroomQuery.data ?? [];
   const today = todayDateString();
 
-  // Every announcement with an event date, plus every Aircon & Servicing
-  // item (scheduled or still open) -- same event shape the Showroom page's
-  // own calendar uses, so what shows there also shows here for everyone.
+  // Every announcement with an upcoming event date, plus every Aircon &
+  // Servicing item (scheduled or still open) -- same event shape the
+  // Showroom page's own calendar uses, so what shows there also shows here
+  // for everyone. An announcement whose event date has passed drops off
+  // the calendar -- it's archived under Notice Board's Past Events instead.
   const dashboardEvents = useMemo(
     () => [
       ...allAnnouncements
-        .filter((a) => a.eventDate)
+        .filter((a) => a.eventDate && a.eventDate >= today)
         .map((a) => ({ id: a.id, date: a.eventDate!, title: a.title, time: a.eventTime })),
       ...showroomItems
         .filter((i) => i.category === "aircon_servicing")

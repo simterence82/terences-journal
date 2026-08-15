@@ -8,12 +8,14 @@ import {
   useUpdateAnnouncement,
 } from "../hooks/useAnnouncements";
 import { useAuth } from "../lib/AuthContext";
+import { todayDateString } from "../lib/firestoreUtil";
 import { isAdminRole, type Announcement } from "../lib/types";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Textarea } from "../components/Textarea";
 import { Badge } from "../components/Badge";
 import { Checkbox } from "../components/Checkbox";
+import { Tabs } from "../components/Tabs";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { EmptyState } from "../components/EmptyState";
@@ -62,6 +64,51 @@ const EventDateTimeField: React.FC<{
   </div>
 );
 
+/** One announcement card -- reused for both the live feed and the Past
+    Events archive, since only which list it's drawn from differs. */
+const AnnouncementCard: React.FC<{
+  announcement: Announcement;
+  isPastEvent: boolean;
+  isAdmin: boolean;
+  onTogglePin: (a: Announcement) => void;
+  onEdit: (a: Announcement) => void;
+  onDelete: (a: Announcement) => void;
+}> = ({ announcement: a, isPastEvent, isAdmin, onTogglePin, onEdit, onDelete }) => (
+  <div className={`flex flex-col gap-2 rounded-xl border bg-panel p-5 shadow-sm ${a.pinned ? "border-brand" : "border-line"}`}>
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center gap-2">
+        {a.pinned && <Badge variant="brand">Pinned</Badge>}
+        <h2 className="font-display text-lg font-semibold text-ink">{a.title}</h2>
+      </div>
+      {isAdmin && (
+        <div className="flex shrink-0 items-center gap-1">
+          <Button variant="ghost" size="icon" onClick={() => onTogglePin(a)} aria-label={a.pinned ? "Unpin" : "Pin"}>
+            {a.pinned ? <PinOff size={16} /> : <Pin size={16} />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => onEdit(a)} aria-label="Edit announcement">
+            <Pencil size={16} />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => onDelete(a)} aria-label="Delete announcement">
+            <Trash2 size={16} />
+          </Button>
+        </div>
+      )}
+    </div>
+    <p className="whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-ink">{a.body}</p>
+    {a.eventDate && (
+      <Badge variant={isPastEvent ? "outline" : "accent"} className="w-fit gap-1">
+        <CalendarClock size={12} /> {new Date(`${a.eventDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
+        {a.eventTime ? ` · ${a.eventTime}` : ""}
+        {isPastEvent ? " · Event has passed" : " · On dashboard calendar"}
+      </Badge>
+    )}
+    <p className="text-xs text-faint-ink">
+      {a.createdByName ?? "Studio"} · {formatDate(a.createdAt)}
+      {a.updatedAt ? ` (edited ${formatDate(a.updatedAt)})` : ""}
+    </p>
+  </div>
+);
+
 export const NoticeBoardPage: React.FC = () => {
   const { authState } = useAuth();
   const currentUser = authState.type === "authenticated" ? authState.user : null;
@@ -77,8 +124,16 @@ export const NoticeBoardPage: React.FC = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<Announcement | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [tab, setTab] = useState<"notices" | "past">("notices");
 
   const announcements = listQuery.data ?? [];
+  const today = todayDateString();
+  // An announcement with no event date never expires -- only ones whose
+  // event date has actually come and gone move to the Past Events archive,
+  // out of the live feed and off the dashboard calendar.
+  const activeAnnouncements = announcements.filter((a) => !a.eventDate || a.eventDate >= today);
+  const pastEventAnnouncements = announcements.filter((a) => a.eventDate && a.eventDate < today);
+  const visibleAnnouncements = tab === "notices" ? activeAnnouncements : pastEventAnnouncements;
 
   const resetForm = () => setForm(EMPTY_FORM);
 
@@ -165,49 +220,38 @@ export const NoticeBoardPage: React.FC = () => {
         )}
       </div>
 
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as typeof tab)}
+        options={[
+          { value: "notices", label: "Notices", count: activeAnnouncements.length },
+          { value: "past", label: "Past Events", count: pastEventAnnouncements.length },
+        ]}
+      />
+
       {listQuery.isLoading ? (
         <div className="flex flex-col gap-4">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} style={{ height: 100 }} />
           ))}
         </div>
-      ) : announcements.length === 0 ? (
-        <EmptyState icon={<Megaphone size={28} />} message="No announcements yet." />
+      ) : visibleAnnouncements.length === 0 ? (
+        <EmptyState
+          icon={<Megaphone size={28} />}
+          message={tab === "notices" ? "No announcements yet." : "No past events yet -- they'll show up here once their date passes."}
+        />
       ) : (
         <div className="flex flex-col gap-4">
-          {announcements.map((a) => (
-            <div key={a.id} className={`flex flex-col gap-2 rounded-xl border bg-panel p-5 shadow-sm ${a.pinned ? "border-brand" : "border-line"}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  {a.pinned && <Badge variant="brand">Pinned</Badge>}
-                  <h2 className="font-display text-lg font-semibold text-ink">{a.title}</h2>
-                </div>
-                {isAdmin && (
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => togglePin(a)} aria-label={a.pinned ? "Unpin" : "Pin"}>
-                      {a.pinned ? <PinOff size={16} /> : <Pin size={16} />}
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(a)} aria-label="Edit announcement">
-                      <Pencil size={16} />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(a)} aria-label="Delete announcement">
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <p className="whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-ink">{a.body}</p>
-              {a.eventDate && (
-                <Badge variant="accent" className="w-fit gap-1">
-                  <CalendarClock size={12} /> {new Date(`${a.eventDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
-                  {a.eventTime ? ` · ${a.eventTime}` : ""} · On dashboard calendar
-                </Badge>
-              )}
-              <p className="text-xs text-faint-ink">
-                {a.createdByName ?? "Studio"} · {formatDate(a.createdAt)}
-                {a.updatedAt ? ` (edited ${formatDate(a.updatedAt)})` : ""}
-              </p>
-            </div>
+          {visibleAnnouncements.map((a) => (
+            <AnnouncementCard
+              key={a.id}
+              announcement={a}
+              isPastEvent={tab === "past"}
+              isAdmin={isAdmin}
+              onTogglePin={togglePin}
+              onEdit={openEdit}
+              onDelete={(target) => deleteTarget.open(target)}
+            />
           ))}
         </div>
       )}

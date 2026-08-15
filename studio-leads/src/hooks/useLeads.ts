@@ -28,6 +28,7 @@ function toLead(id: string, data: Record<string, any>): Lead {
     address: data.address ?? null,
     budget: data.budget ?? null,
     notes: data.notes ?? null,
+    referredBy: data.referredBy ?? null,
     assignedTo: data.assignedTo ?? null,
     assignedToName: data.assignedToName ?? null,
     status: data.status,
@@ -82,6 +83,7 @@ export interface LeadCreateInput {
   address: string | null;
   budget: number | null;
   notes: string | null;
+  referredBy: string | null;
   /** null = open to designers (unclaimed, any designer can claim it). */
   assignedTo: string | null;
   assignedToName: string | null;
@@ -102,6 +104,7 @@ export const useCreateLead = () => {
         address: input.address,
         budget: input.budget,
         notes: input.notes,
+        referredBy: input.referredBy,
         assignedTo: input.assignedTo,
         assignedToName: input.assignedToName,
         status: "new" as LeadStatus,

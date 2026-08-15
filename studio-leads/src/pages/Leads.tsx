@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Phone, Mail, MapPin, AlertTriangle, Handshake, Trash2 } from "lucide-react";
+import { Plus, Phone, Mail, MapPin, AlertTriangle, Handshake, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useLeadsList, useCreateLead, useUpdateLead, useDeleteLead, useClaimLead } from "../hooks/useLeads";
 import { useFollowUpsForLead, useCreateFollowUp } from "../hooks/useFollowUps";
@@ -48,6 +48,7 @@ const EMPTY_ADD_FORM = {
   address: "",
   budget: "",
   notes: "",
+  referredBy: "",
   assignedTo: "",
   nextFollowUpDate: "",
 };
@@ -56,6 +57,7 @@ export const LeadsPage: React.FC = () => {
   const { authState } = useAuth();
   const currentUser = authState.type === "authenticated" ? authState.user : null;
   const isAdmin = !!currentUser && isAdminRole(currentUser.role);
+  const isSuperAdmin = currentUser?.role === "super_admin";
 
   const leadsQuery = useLeadsList(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
   const designersQuery = useDesignersList();
@@ -63,7 +65,7 @@ export const LeadsPage: React.FC = () => {
   const deleteMutation = useDeleteLead();
   const deleteTarget = useConfirmDialog<Lead>();
 
-  const [tab, setTab] = useState<"active" | "signed" | "rejected">("active");
+  const [tab, setTab] = useState<"active" | "signed" | "rejected" | "referrals">("active");
   const [designerFilter, setDesignerFilter] = useState("all");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addForm, setAddForm] = useState(EMPTY_ADD_FORM);
@@ -82,9 +84,33 @@ export const LeadsPage: React.FC = () => {
   const activeLeads = filteredByDesigner.filter((l) => ACTIVE_STATUSES.includes(l.status));
   const signedLeads = filteredByDesigner.filter((l) => l.status === "signed");
   const rejectedLeads = filteredByDesigner.filter((l) => l.status === "rejected");
-  const visibleLeads = tab === "active" ? activeLeads : tab === "signed" ? signedLeads : rejectedLeads;
+  const visibleLeads = tab === "active" ? activeLeads : tab === "signed" ? signedLeads : tab === "rejected" ? rejectedLeads : [];
 
   const selectedLead = useMemo(() => leads.find((l) => l.id === selectedLeadId) ?? null, [leads, selectedLeadId]);
+
+  // Super admin only -- who's referring clients, and how much revenue
+  // that's translated to. Uses the unfiltered lead set (not the designer
+  // filter) since this is a studio-wide referral report.
+  const referralStats = useMemo(() => {
+    const map = new Map<string, { referrer: string; leadsCount: number; signedCount: number; totalContractSum: number }>();
+    for (const l of leads) {
+      const key = l.referredBy?.trim();
+      if (!key) continue;
+      const entry = map.get(key) ?? { referrer: key, leadsCount: 0, signedCount: 0, totalContractSum: 0 };
+      entry.leadsCount += 1;
+      if (l.status === "signed") {
+        entry.signedCount += 1;
+        entry.totalContractSum += l.contractAmount ?? 0;
+      }
+      map.set(key, entry);
+    }
+    return [...map.values()].sort((a, b) => b.totalContractSum - a.totalContractSum || b.leadsCount - a.leadsCount);
+  }, [leads]);
+
+  const distinctReferrers = useMemo(
+    () => [...new Set(leads.map((l) => l.referredBy).filter((r): r is string => !!r && r.trim() !== ""))].sort(),
+    [leads]
+  );
 
   useEffect(() => {
     if (isAddOpen && designers.length > 0 && !addForm.assignedTo) {
@@ -117,6 +143,7 @@ export const LeadsPage: React.FC = () => {
         address: addForm.address || null,
         budget: addForm.budget ? Number(addForm.budget) : null,
         notes: addForm.notes || null,
+        referredBy: addForm.referredBy.trim() || null,
         assignedTo: isOpen ? null : designer!.id,
         assignedToName: isOpen ? OPEN_TO_DESIGNERS_LABEL : designer!.displayName,
         nextFollowUpDate: addForm.nextFollowUpDate || null,
@@ -167,6 +194,7 @@ export const LeadsPage: React.FC = () => {
             { value: "active", label: "Active", count: activeLeads.length },
             { value: "signed", label: "Signed", count: signedLeads.length },
             { value: "rejected", label: "Rejected", count: rejectedLeads.length },
+            ...(isSuperAdmin ? [{ value: "referrals", label: "Referrals", count: referralStats.length }] : []),
           ]}
         />
         {isAdmin && designers.length > 0 && (
@@ -183,7 +211,37 @@ export const LeadsPage: React.FC = () => {
         )}
       </div>
 
-      {leadsQuery.isLoading ? (
+      {tab === "referrals" ? (
+        leadsQuery.isLoading ? (
+          <Skeleton style={{ height: 220 }} />
+        ) : referralStats.length === 0 ? (
+          <EmptyState icon={<Users size={28} />} message="No leads have a referrer recorded yet." />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-line bg-panel shadow-sm">
+            <table className="w-full text-[0.8125rem]">
+              <thead className="bg-surface">
+                <tr>
+                  {["Referred By", "Clients Referred", "Signed", "Total Contract Sum"].map((h) => (
+                    <th key={h} className="border-b border-line px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {referralStats.map((r) => (
+                  <tr key={r.referrer} className="hover:bg-surface">
+                    <td className="border-b border-line px-4 py-3 font-medium text-ink">{r.referrer}</td>
+                    <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{r.leadsCount}</td>
+                    <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{r.signedCount}</td>
+                    <td className="border-b border-line px-4 py-3 font-medium text-ink tabular-nums">{formatSGD(r.totalContractSum)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : leadsQuery.isLoading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} style={{ height: 160 }} />
@@ -292,6 +350,20 @@ export const LeadsPage: React.FC = () => {
             </div>
           </div>
           <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-ink">Referred By</label>
+            <Input
+              list="referrer-options"
+              value={addForm.referredBy}
+              onChange={(e) => setAddForm((p) => ({ ...p, referredBy: e.target.value }))}
+              placeholder="Who told them about us? Pick a name or type a new one"
+            />
+            <datalist id="referrer-options">
+              {distinctReferrers.map((r) => (
+                <option key={r} value={r} />
+              ))}
+            </datalist>
+          </div>
+          <div className="flex flex-col gap-2">
             <label className="text-[0.8125rem] font-medium text-ink">Address</label>
             <Input value={addForm.address} onChange={(e) => setAddForm((p) => ({ ...p, address: e.target.value }))} />
           </div>
@@ -396,6 +468,12 @@ const ClaimLeadDialog: React.FC<{ lead: Lead; onClose: () => void }> = ({ lead, 
             <span className="text-faint-ink">Budget: </span>
             <span className="text-ink">{lead.budget != null ? formatSGD(lead.budget) : "—"}</span>
           </div>
+          {lead.referredBy && (
+            <div>
+              <span className="text-faint-ink">Referred By: </span>
+              <span className="text-ink">{lead.referredBy}</span>
+            </div>
+          )}
         </div>
         {lead.notes && <p className="text-[0.8125rem] text-faint-ink">{lead.notes}</p>}
         <p className="text-[0.8125rem] text-faint-ink">
@@ -572,6 +650,12 @@ const LeadFullDetailDialog: React.FC<{
               {lead.createdByName ? ` by ${lead.createdByName}` : ""}
             </span>
           </div>
+          {lead.referredBy && (
+            <div>
+              <span className="text-faint-ink">Referred By: </span>
+              <span className="text-ink">{lead.referredBy}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-4">

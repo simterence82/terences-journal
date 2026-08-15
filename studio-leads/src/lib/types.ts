@@ -93,6 +93,10 @@ export interface Lead {
   address: string | null;
   budget: number | null;
   notes: string | null;
+  // Who told this client about the studio -- a past client, a vendor, a
+  // friend of the firm. Free text (picked from previously used names via
+  // a datalist, or a new one typed in), not a fixed enum like source.
+  referredBy: string | null;
   assignedTo: string | null;
   assignedToName: string | null;
   status: LeadStatus;
