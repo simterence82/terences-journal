@@ -328,6 +328,9 @@ const LeadDetailDialog: React.FC<{
   const [nextFollowUpDate, setNextFollowUpDate] = useState(lead.nextFollowUpDate ?? "");
   const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? "");
   const [notes, setNotes] = useState(lead.notes ?? "");
+  // Follow-up history is noise once a deal is closed -- collapsed by
+  // default for signed/rejected leads, but still one click away.
+  const [showFollowUps, setShowFollowUps] = useState(!CLOSED_LEAD_STATUSES.includes(lead.status));
 
   useEffect(() => {
     setStatus(lead.status);
@@ -335,6 +338,7 @@ const LeadDetailDialog: React.FC<{
     setNextFollowUpDate(lead.nextFollowUpDate ?? "");
     setAssignedTo(lead.assignedTo ?? "");
     setNotes(lead.notes ?? "");
+    setShowFollowUps(!CLOSED_LEAD_STATUSES.includes(lead.status));
   }, [lead]);
 
   const [fuMethod, setFuMethod] = useState<string>(FOLLOW_UP_METHODS[0]);
@@ -457,6 +461,27 @@ const LeadDetailDialog: React.FC<{
               </div>
             )}
           </div>
+          <div className="flex items-center gap-5 text-[0.8125rem]">
+            <label className="flex items-center gap-2 font-medium text-ink">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line accent-[var(--ok)]"
+                checked={status === "signed"}
+                onChange={(e) => setStatus(e.target.checked ? "signed" : "follow_up")}
+              />
+              Signed
+            </label>
+            <label className="flex items-center gap-2 font-medium text-ink">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line accent-[var(--bad)]"
+                checked={status === "rejected"}
+                onChange={(e) => setStatus(e.target.checked ? "rejected" : "follow_up")}
+              />
+              Rejected
+            </label>
+            <span className="text-faint-ink">Check, then Save Changes -- no follow-up note required.</span>
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-ink">Quotation Amount (S$)</label>
@@ -486,58 +511,70 @@ const LeadDetailDialog: React.FC<{
         </div>
 
         <div className="flex flex-col gap-3 border-t border-line pt-5">
-          <h3 className="font-display text-base font-semibold text-ink">Follow-up Timeline</h3>
-          {followUpsQuery.isLoading ? (
-            <Skeleton style={{ height: 60 }} />
-          ) : (followUpsQuery.data ?? []).length === 0 ? (
-            <p className="text-[0.8125rem] text-faint-ink">No follow-ups logged yet.</p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {followUpsQuery.data!.map((fu) => (
-                <li key={fu.id} className="rounded-xl border border-line bg-panel p-3 text-[0.8125rem]">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <Badge variant="outline">{fu.method}</Badge>
-                    <span className="text-xs text-faint-ink">
-                      {new Date(fu.loggedAt).toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {fu.loggedByName}
-                    </span>
-                  </div>
-                  <p className="text-ink">{fu.outcome}</p>
-                  {fu.nextFollowUpDate && (
-                    <p className="mt-1 text-xs text-faint-ink">
-                      Next follow-up set for {new Date(`${fu.nextFollowUpDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short" })}
-                    </p>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-display text-base font-semibold text-ink">Follow-up Timeline</h3>
+            {CLOSED_LEAD_STATUSES.includes(lead.status) && (
+              <Button variant="ghost" size="sm" onClick={() => setShowFollowUps((v) => !v)}>
+                {showFollowUps ? "Hide" : `Show History${followUpsQuery.data ? ` (${followUpsQuery.data.length})` : ""}`}
+              </Button>
+            )}
+          </div>
 
-          {!CLOSED_LEAD_STATUSES.includes(lead.status) && (
-            <form onSubmit={handleLogFollowUp} className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
-              <h4 className="text-[0.8125rem] font-semibold text-ink">Log a Follow-up</h4>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Select value={fuMethod} onValueChange={setFuMethod} options={FOLLOW_UP_METHODS.map((m) => ({ value: m, label: m }))} />
-                <Input type="date" value={fuNextDate} onChange={(e) => setFuNextDate(e.target.value)} placeholder="Next follow-up date" />
-              </div>
-              <Textarea
-                rows={2}
-                value={fuOutcome}
-                onChange={(e) => setFuOutcome(e.target.value)}
-                placeholder="What happened? Did they respond? Any objections, next steps..."
-                required
-              />
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <Button type="button" variant="danger" size="sm" onClick={() => quickClose("rejected")} disabled={createFollowUp.isPending}>
-                  Log &amp; Mark Rejected
-                </Button>
-                <Button type="button" variant="soft" size="sm" onClick={() => quickClose("signed")} disabled={createFollowUp.isPending}>
-                  Log &amp; Mark Signed
-                </Button>
-                <Button type="submit" size="sm" disabled={createFollowUp.isPending}>
-                  {createFollowUp.isPending ? "Saving..." : "Log Follow-up"}
-                </Button>
-              </div>
-            </form>
+          {showFollowUps && (
+            <>
+              {followUpsQuery.isLoading ? (
+                <Skeleton style={{ height: 60 }} />
+              ) : (followUpsQuery.data ?? []).length === 0 ? (
+                <p className="text-[0.8125rem] text-faint-ink">No follow-ups logged yet.</p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {followUpsQuery.data!.map((fu) => (
+                    <li key={fu.id} className="rounded-xl border border-line bg-panel p-3 text-[0.8125rem]">
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <Badge variant="outline">{fu.method}</Badge>
+                        <span className="text-xs text-faint-ink">
+                          {new Date(fu.loggedAt).toLocaleString("en-SG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · {fu.loggedByName}
+                        </span>
+                      </div>
+                      <p className="text-ink">{fu.outcome}</p>
+                      {fu.nextFollowUpDate && (
+                        <p className="mt-1 text-xs text-faint-ink">
+                          Next follow-up set for {new Date(`${fu.nextFollowUpDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short" })}
+                        </p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {!CLOSED_LEAD_STATUSES.includes(lead.status) && (
+                <form onSubmit={handleLogFollowUp} className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+                  <h4 className="text-[0.8125rem] font-semibold text-ink">Log a Follow-up</h4>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Select value={fuMethod} onValueChange={setFuMethod} options={FOLLOW_UP_METHODS.map((m) => ({ value: m, label: m }))} />
+                    <Input type="date" value={fuNextDate} onChange={(e) => setFuNextDate(e.target.value)} placeholder="Next follow-up date" />
+                  </div>
+                  <Textarea
+                    rows={2}
+                    value={fuOutcome}
+                    onChange={(e) => setFuOutcome(e.target.value)}
+                    placeholder="What happened? Did they respond? Any objections, next steps..."
+                    required
+                  />
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Button type="button" variant="danger" size="sm" onClick={() => quickClose("rejected")} disabled={createFollowUp.isPending}>
+                      Log &amp; Mark Rejected
+                    </Button>
+                    <Button type="button" variant="soft" size="sm" onClick={() => quickClose("signed")} disabled={createFollowUp.isPending}>
+                      Log &amp; Mark Signed
+                    </Button>
+                    <Button type="submit" size="sm" disabled={createFollowUp.isPending}>
+                      {createFollowUp.isPending ? "Saving..." : "Log Follow-up"}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </>
           )}
         </div>
       </div>
