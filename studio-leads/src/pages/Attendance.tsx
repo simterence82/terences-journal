@@ -1,16 +1,18 @@
-import React, { useMemo, useState } from "react";
-import { CalendarCheck, ClipboardList } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { CalendarCheck, ChevronLeft, ChevronRight, ClipboardList, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useAttendanceList, useMarkAttendance } from "../hooks/useAttendance";
 import { useDesignersList } from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
-import { summarizeAttendance } from "../lib/attendanceSummary";
+import { summarizeAttendance, type DesignerAttendanceSummary } from "../lib/attendanceSummary";
 import { KPI_PERIOD_LABELS, type KpiPeriod } from "../lib/kpi";
 import { Input } from "../components/Input";
 import { Select } from "../components/Select";
 import { Badge } from "../components/Badge";
+import { Button } from "../components/Button";
 import { Tabs } from "../components/Tabs";
+import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 import {
@@ -20,6 +22,7 @@ import {
   ATTENDANCE_STATUS_LABELS,
   isAdminRole,
   type AttendanceReason,
+  type AttendanceRecord,
   type AttendanceStatus,
 } from "../lib/types";
 
@@ -31,7 +34,74 @@ const STATUS_VARIANT: Record<AttendanceStatus, "ok" | "warn" | "outline" | "acce
   absent: "bad",
 };
 
-type Tab = "mark" | "history" | "summary";
+const STATUS_DOT_CLASS: Record<AttendanceStatus, string> = {
+  present: "bg-ok",
+  late: "bg-warn",
+  half_day: "bg-faint-ink",
+  leave: "bg-accent",
+  absent: "bg-bad",
+};
+
+const LOW_ATTENDANCE_THRESHOLD = 70;
+
+type Tab = "mark" | "calendar" | "history" | "summary";
+
+function monthLabel(d: Date): string {
+  return d.toLocaleDateString("en-SG", { month: "long", year: "numeric" });
+}
+
+function toDateStr(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Sun-Sat week grid for the given month, padded with nulls outside the month. */
+function buildMonthGrid(year: number, month: number): (string | null)[][] {
+  const startWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (string | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let day = 1; day <= daysInMonth; day++) cells.push(toDateStr(year, month, day));
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks: (string | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+function csvEscape(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+function summariesToCsv(summaries: DesignerAttendanceSummary[]): string {
+  const header = ["Designer", "Present", "Late", "Half Day", "Leave", "Absent", "Attendance Rate", "Reasons"];
+  const rows = summaries.map((s) => {
+    const reasons = Object.entries(s.reasonBreakdown)
+      .map(([reason, count]) => `${ATTENDANCE_REASON_LABELS[reason as AttendanceReason]}: ${count}`)
+      .join("; ");
+    return [
+      s.designerName,
+      String(s.presentDays),
+      String(s.lateDays),
+      String(s.halfDays),
+      String(s.leaveDays),
+      String(s.absentDays),
+      s.attendanceRate === null ? "" : `${Math.round(s.attendanceRate)}%`,
+      reasons,
+    ];
+  });
+  return [header, ...rows].map((row) => row.map(csvEscape).join(",")).join("\n");
+}
+
+function downloadCsv(filename: string, csv: string): void {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 export const AttendancePage: React.FC = () => {
   const { authState } = useAuth();
@@ -74,9 +144,37 @@ export const AttendancePage: React.FC = () => {
     );
   };
 
+  // -- Calendar tab state --
+  const [calendarDesignerId, setCalendarDesignerId] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [calendarDialogDate, setCalendarDialogDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!calendarDesignerId && designers.length > 0) setCalendarDesignerId(designers[0].id);
+  }, [calendarDesignerId, designers]);
+
+  const calendarDesigner = designers.find((d) => d.id === calendarDesignerId) ?? null;
+  const calendarRecordsByDate = useMemo(() => {
+    const map = new Map<string, AttendanceRecord>();
+    for (const r of records) {
+      if (r.designerId === calendarDesignerId) map.set(r.date, r);
+    }
+    return map;
+  }, [records, calendarDesignerId]);
+  const calendarWeeks = useMemo(
+    () => buildMonthGrid(calendarMonth.getFullYear(), calendarMonth.getMonth()),
+    [calendarMonth]
+  );
+  const today = todayDateString();
+  const dialogRecord = calendarDialogDate ? calendarRecordsByDate.get(calendarDialogDate) ?? null : null;
+
   const tabOptions = isAdmin
     ? [
         { value: "mark", label: "Mark Today" },
+        { value: "calendar", label: "Calendar" },
         { value: "history", label: "History" },
         { value: "summary", label: "Summary" },
       ]
@@ -137,6 +235,127 @@ export const AttendancePage: React.FC = () => {
         </div>
       )}
 
+      {tab === "calendar" && isAdmin && (
+        <div className="flex flex-col gap-4">
+          {designers.length === 0 ? (
+            <EmptyState icon={<CalendarCheck size={26} />} message="No designers yet — add one in Users." />
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Select
+                  className="w-56"
+                  value={calendarDesignerId}
+                  onValueChange={setCalendarDesignerId}
+                  options={designers.map((d) => ({ value: d.id, label: d.displayName }))}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Previous month"
+                    onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+                  >
+                    <ChevronLeft size={16} />
+                  </Button>
+                  <span className="w-40 text-center font-display text-[0.9375rem] font-semibold text-ink">
+                    {monthLabel(calendarMonth)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label="Next month"
+                    onClick={() => setCalendarMonth((m) => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+                  >
+                    <ChevronRight size={16} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setCalendarMonth(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); })}
+                  >
+                    Today
+                  </Button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-line bg-panel p-4 shadow-sm">
+                <div className="grid min-w-[640px] grid-cols-7 gap-1.5">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                    <div key={d} className="pb-1 text-center text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
+                      {d}
+                    </div>
+                  ))}
+                  {calendarWeeks.flatMap((week, wi) =>
+                    week.map((dateStr, di) => {
+                      if (!dateStr) return <div key={`${wi}-${di}`} />;
+                      const record = calendarRecordsByDate.get(dateStr);
+                      const dayNum = Number(dateStr.slice(-2));
+                      const isToday = dateStr === today;
+                      return (
+                        <button
+                          key={dateStr}
+                          type="button"
+                          onClick={() => setCalendarDialogDate(dateStr)}
+                          className={`flex h-16 flex-col items-start gap-1 rounded-lg border p-1.5 text-left transition-colors hover:bg-faint ${
+                            isToday ? "border-brand" : "border-line"
+                          }`}
+                        >
+                          <span className={`text-xs ${isToday ? "font-semibold text-brand" : "text-faint-ink"}`}>{dayNum}</span>
+                          {record && (
+                            <span className="flex items-center gap-1">
+                              <span className={`h-2 w-2 rounded-full ${STATUS_DOT_CLASS[record.status]}`} />
+                              <span className="truncate text-[0.6875rem] text-ink">{ATTENDANCE_STATUS_LABELS[record.status]}</span>
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3 text-xs text-faint-ink">
+                {ATTENDANCE_STATUSES.map((s) => (
+                  <span key={s} className="flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full ${STATUS_DOT_CLASS[s]}`} /> {ATTENDANCE_STATUS_LABELS[s]}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+
+          <Dialog open={calendarDialogDate !== null} onOpenChange={(open) => !open && setCalendarDialogDate(null)}>
+            <DialogHeader>
+              <DialogTitle>
+                {calendarDesigner?.displayName}
+                {calendarDialogDate && ` — ${new Date(`${calendarDialogDate}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "long", year: "numeric" })}`}
+              </DialogTitle>
+            </DialogHeader>
+            {calendarDialogDate && calendarDesigner && (
+              <CalendarMarkForm
+                key={calendarDialogDate}
+                initialStatus={dialogRecord?.status ?? null}
+                initialReason={dialogRecord?.reason ?? null}
+                initialNotes={dialogRecord?.notes ?? ""}
+                isSaving={markMutation.isPending}
+                onSave={(status, reason, notes) => {
+                  markMutation.mutate(
+                    { designerId: calendarDesigner.id, designerName: calendarDesigner.displayName, date: calendarDialogDate, status, reason, notes },
+                    {
+                      onSuccess: () => {
+                        toast.success("Attendance saved");
+                        setCalendarDialogDate(null);
+                      },
+                      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to save attendance"),
+                    }
+                  );
+                }}
+              />
+            )}
+          </Dialog>
+        </div>
+      )}
+
       {tab === "history" && (
         <div className="flex flex-col gap-3">
           {attendanceQuery.isLoading ? (
@@ -178,11 +397,22 @@ export const AttendancePage: React.FC = () => {
 
       {tab === "summary" && (
         <div className="flex flex-col gap-4">
-          <Tabs
-            value={summaryPeriod}
-            onValueChange={(v) => setSummaryPeriod(v as KpiPeriod)}
-            options={(Object.keys(KPI_PERIOD_LABELS) as KpiPeriod[]).map((p) => ({ value: p, label: KPI_PERIOD_LABELS[p] }))}
-          />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Tabs
+              value={summaryPeriod}
+              onValueChange={(v) => setSummaryPeriod(v as KpiPeriod)}
+              options={(Object.keys(KPI_PERIOD_LABELS) as KpiPeriod[]).map((p) => ({ value: p, label: KPI_PERIOD_LABELS[p] }))}
+            />
+            {summaries.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => downloadCsv(`attendance-summary-${summaryPeriod}.csv`, summariesToCsv(summaries))}
+              >
+                <Download size={14} /> Export CSV
+              </Button>
+            )}
+          </div>
           {attendanceQuery.isLoading ? (
             <Skeleton style={{ height: 200 }} />
           ) : summaries.length === 0 ? (
@@ -200,34 +430,42 @@ export const AttendancePage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {summaries.map((s) => (
-                    <tr key={s.designerId} className="hover:bg-surface">
-                      <td className="border-b border-line px-4 py-3 font-medium text-ink">{s.designerName}</td>
-                      <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.presentDays}</td>
-                      <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.lateDays}</td>
-                      <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.halfDays}</td>
-                      <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.leaveDays}</td>
-                      <td className="border-b border-line px-4 py-3 text-ink tabular-nums">
-                        <span className={s.absentDays > 0 ? "font-semibold text-bad" : ""}>{s.absentDays}</span>
-                      </td>
-                      <td className="border-b border-line px-4 py-3 font-medium text-ink tabular-nums">
-                        {s.attendanceRate === null ? "—" : `${Math.round(s.attendanceRate)}%`}
-                      </td>
-                      <td className="border-b border-line px-4 py-3">
-                        {Object.keys(s.reasonBreakdown).length === 0 ? (
-                          <span className="text-faint-ink">—</span>
-                        ) : (
-                          <div className="flex flex-wrap gap-1">
-                            {ATTENDANCE_REASONS.filter((r) => s.reasonBreakdown[r]).map((r) => (
-                              <Badge key={r} variant="outline" className="whitespace-nowrap">
-                                {ATTENDANCE_REASON_LABELS[r]} ×{s.reasonBreakdown[r]}
-                              </Badge>
-                            ))}
+                  {summaries.map((s) => {
+                    const isLow = s.attendanceRate !== null && s.attendanceRate < LOW_ATTENDANCE_THRESHOLD;
+                    return (
+                      <tr key={s.designerId} className={isLow ? "bg-[var(--bad-wash)] hover:bg-[var(--bad-wash)]" : "hover:bg-surface"}>
+                        <td className="border-b border-line px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-ink">{s.designerName}</span>
+                            {isLow && <Badge variant="bad">Low</Badge>}
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.presentDays}</td>
+                        <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.lateDays}</td>
+                        <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.halfDays}</td>
+                        <td className="border-b border-line px-4 py-3 text-ink tabular-nums">{s.leaveDays}</td>
+                        <td className="border-b border-line px-4 py-3 text-ink tabular-nums">
+                          <span className={s.absentDays > 0 ? "font-semibold text-bad" : ""}>{s.absentDays}</span>
+                        </td>
+                        <td className="border-b border-line px-4 py-3 font-medium tabular-nums">
+                          <span className={isLow ? "text-bad" : "text-ink"}>{s.attendanceRate === null ? "—" : `${Math.round(s.attendanceRate)}%`}</span>
+                        </td>
+                        <td className="border-b border-line px-4 py-3">
+                          {Object.keys(s.reasonBreakdown).length === 0 ? (
+                            <span className="text-faint-ink">—</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {ATTENDANCE_REASONS.filter((r) => s.reasonBreakdown[r]).map((r) => (
+                                <Badge key={r} variant="outline" className="whitespace-nowrap">
+                                  {ATTENDANCE_REASON_LABELS[r]} ×{s.reasonBreakdown[r]}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -300,5 +538,62 @@ const AttendanceRow: React.FC<{
         />
       </td>
     </tr>
+  );
+};
+
+/** Explicit-save form used inside the Calendar tab's day-editing dialog. */
+const CalendarMarkForm: React.FC<{
+  initialStatus: AttendanceStatus | null;
+  initialReason: AttendanceReason | null;
+  initialNotes: string;
+  isSaving: boolean;
+  onSave: (status: AttendanceStatus, reason: AttendanceReason | null, notes: string | null) => void;
+}> = ({ initialStatus, initialReason, initialNotes, isSaving, onSave }) => {
+  const [status, setStatus] = useState(initialStatus ?? "present");
+  const [reason, setReason] = useState(initialReason);
+  const [notes, setNotes] = useState(initialNotes);
+
+  const needsReason = status !== "present";
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(status, needsReason ? reason : null, notes || null);
+      }}
+      className="flex flex-col gap-4"
+    >
+      <div className="flex flex-col gap-2">
+        <label className="text-[0.8125rem] font-medium text-ink">Status</label>
+        <Select
+          value={status}
+          onValueChange={(v) => {
+            const next = v as AttendanceStatus;
+            setStatus(next);
+            if (next === "present") setReason(null);
+          }}
+          options={ATTENDANCE_STATUSES.map((s) => ({ value: s, label: ATTENDANCE_STATUS_LABELS[s] }))}
+        />
+      </div>
+      {needsReason && (
+        <div className="flex flex-col gap-2">
+          <label className="text-[0.8125rem] font-medium text-ink">Reason</label>
+          <Select
+            value={reason ?? ""}
+            onValueChange={(v) => setReason((v || null) as AttendanceReason | null)}
+            options={[{ value: "", label: "Select reason..." }, ...ATTENDANCE_REASONS.map((r) => ({ value: r, label: ATTENDANCE_REASON_LABELS[r] }))]}
+          />
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
+        <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional note" />
+      </div>
+      <DialogFooter>
+        <Button type="submit" disabled={isSaving}>
+          {isSaving ? "Saving..." : "Save"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 };
