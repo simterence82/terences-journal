@@ -51,9 +51,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     <div className="flex min-h-screen flex-col bg-bg">
       <header className="sticky top-0 z-[200] border-b border-line bg-panel/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-col items-start gap-0.5">
             <img src="/logo.png" alt="Form & Space" className="h-8 w-8 object-contain dark:invert" />
-            <span className="font-display text-[1.2rem] font-bold uppercase leading-none tracking-[0.12em] text-ink">
+            <span className="font-display text-[0.65rem] font-bold uppercase leading-none tracking-[0.1em] text-ink">
               Form &amp; Space
             </span>
           </div>
