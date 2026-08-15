@@ -9,6 +9,7 @@ import {
 } from "../hooks/useShowroom";
 import { useAuth } from "../lib/AuthContext";
 import {
+  AIRCON_ADD_STATUSES,
   SHOWROOM_CATEGORIES,
   SHOWROOM_CATEGORY_LABELS,
   SHOWROOM_STATUSES,
@@ -24,6 +25,7 @@ import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Textarea } from "../components/Textarea";
 import { Select } from "../components/Select";
+import { Tabs } from "../components/Tabs";
 import { Badge } from "../components/Badge";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
@@ -36,6 +38,7 @@ const STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | 
   low_stock: "warn",
   needs_attention: "warn",
   faulty: "bad",
+  servicing_needed: "warn",
   servicing_scheduled: "accent",
   resolved: "outline",
 };
@@ -87,7 +90,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
       lowStock: items.filter((i) => i.status === "low_stock").length,
       needsAttention: items.filter((i) => i.status === "needs_attention").length,
       faulty: items.filter((i) => i.status === "faulty").length,
-      servicing: items.filter((i) => i.status === "servicing_scheduled").length,
+      servicing: items.filter((i) => i.status === "servicing_needed" || i.status === "servicing_scheduled").length,
     }),
     [items]
   );
@@ -99,7 +102,8 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
   const resetForm = () => setForm(EMPTY_FORM);
 
   const openAddDialog = (category?: ShowroomCategory) => {
-    setForm({ ...EMPTY_FORM, category: category ?? EMPTY_FORM.category });
+    const nextCategory = category ?? EMPTY_FORM.category;
+    setForm({ ...EMPTY_FORM, category: nextCategory, status: nextCategory === "aircon_servicing" ? AIRCON_ADD_STATUSES[0] : EMPTY_FORM.status });
     setIsAddOpen(true);
   };
 
@@ -194,25 +198,22 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
 
   const activeCategory = tab === "overview" ? null : tab;
   const categoryItems = activeCategory ? items.filter((i) => i.category === activeCategory) : [];
+  // Every aircon_servicing item shows on the calendar, not just scheduled
+  // ones -- unscheduled items (servicing_needed/faulty/needs_attention)
+  // anchor on their reported date so admins see the whole backlog at a
+  // glance, alongside actually-booked servicing dates.
   const servicingEvents = useMemo(
     () =>
       activeCategory === "aircon_servicing"
-        ? categoryItems
-            .filter((i): i is ShowroomItem & { scheduledAt: string } => !!i.scheduledAt)
-            .map((i) => ({
-              id: i.id,
-              date: i.scheduledAt.slice(0, 10),
-              title: i.title,
-              time: new Date(i.scheduledAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" }),
-            }))
+        ? categoryItems.map((i) => ({
+            id: i.id,
+            date: (i.scheduledAt ?? i.createdAt).slice(0, 10),
+            title: `${i.title} — ${SHOWROOM_STATUS_LABELS[i.status]}`,
+            time: i.scheduledAt ? new Date(i.scheduledAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit" }) : null,
+          }))
         : [],
     [activeCategory, categoryItems]
   );
-
-  const sidebarOptions: { value: string; label: string; count?: number }[] = [
-    { value: "overview", label: "Overview" },
-    ...SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c], count: items.filter((i) => i.category === c).length })),
-  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -221,27 +222,16 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
         <p className="mt-1 text-[0.9375rem] text-faint-ink">Stock, equipment, and issues at the showroom</p>
       </div>
 
-      <div className="flex flex-col gap-6 sm:flex-row">
-        <nav className="flex shrink-0 flex-row gap-1 overflow-x-auto sm:w-52 sm:flex-col sm:overflow-visible">
-          {sidebarOptions.map((opt) => {
-            const active = opt.value === tab;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() => setTab(opt.value as AdminTab)}
-                className={`flex shrink-0 items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
-                  active ? "bg-[var(--brand-wash)] text-brand" : "text-faint-ink hover:bg-faint hover:text-ink"
-                }`}
-              >
-                <span>{opt.label}</span>
-                {typeof opt.count === "number" && <span className="text-xs opacity-70">{opt.count}</span>}
-              </button>
-            );
-          })}
-        </nav>
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as AdminTab)}
+        options={[
+          { value: "overview", label: "Overview" },
+          ...SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c], count: items.filter((i) => i.category === c).length })),
+        ]}
+        className="flex-wrap"
+      />
 
-        <div className="min-w-0 flex-1">
       {tab === "overview" ? (
         <div className="flex flex-col gap-6">
           {isLoading ? (
@@ -255,7 +245,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
               <SummaryCard label="Low Stock" value={counts.lowStock} icon={<PackageX size={16} />} tone={counts.lowStock > 0 ? "warn" : "ok"} />
               <SummaryCard label="Needs Attention" value={counts.needsAttention} icon={<AlertTriangle size={16} />} tone={counts.needsAttention > 0 ? "warn" : "ok"} />
               <SummaryCard label="Faulty" value={counts.faulty} icon={<Wrench size={16} />} tone={counts.faulty > 0 ? "bad" : "ok"} />
-              <SummaryCard label="Servicing Scheduled" value={counts.servicing} icon={<Sparkles size={16} />} tone="accent" />
+              <SummaryCard label="Aircon Servicing" value={counts.servicing} icon={<Sparkles size={16} />} tone="accent" />
             </div>
           )}
 
@@ -304,7 +294,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
           </div>
 
           {activeCategory === "aircon_servicing" && (
-            <EventCalendar events={servicingEvents} emptyHint="Nothing scheduled yet." />
+            <EventCalendar events={servicingEvents} emptyHint="Nothing reported or scheduled yet." />
           )}
 
           {isLoading ? (
@@ -354,8 +344,6 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
           )}
         </div>
       )}
-        </div>
-      </div>
 
       <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
         <DialogHeader>
@@ -366,12 +354,27 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
             {!activeCategory && (
               <div className="flex flex-col gap-2">
                 <label className="text-[0.8125rem] font-medium text-ink">Category</label>
-                <Select value={form.category} onValueChange={(v) => setForm((p) => ({ ...p, category: v as ShowroomCategory }))} options={SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c] }))} />
+                <Select
+                  value={form.category}
+                  onValueChange={(v) => {
+                    const nextCategory = v as ShowroomCategory;
+                    setForm((p) => ({
+                      ...p,
+                      category: nextCategory,
+                      status: nextCategory === "aircon_servicing" ? AIRCON_ADD_STATUSES[0] : "ok",
+                    }));
+                  }}
+                  options={SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c] }))}
+                />
               </div>
             )}
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-ink">Status</label>
-              <Select value={form.status} onValueChange={(v) => setForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
+              <Select
+                value={form.status}
+                onValueChange={(v) => setForm((p) => ({ ...p, status: v as ShowroomStatus }))}
+                options={(form.category === "aircon_servicing" ? AIRCON_ADD_STATUSES : SHOWROOM_STATUSES).map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
+              />
             </div>
           </div>
           {needsSchedule(form.category, form.status) && (
@@ -389,14 +392,18 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
             <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
             <Input value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} placeholder="e.g. Mineral water running low" required />
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Description</label>
-            <Textarea rows={2} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
-            <Textarea rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Any extra detail, vendor contacted, etc." />
-          </div>
+          {!needsSchedule(form.category, form.status) && (
+            <>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Description</label>
+                <Textarea rows={2} value={form.description} onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
+                <Textarea rows={2} value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Any extra detail, vendor contacted, etc." />
+              </div>
+            </>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? "Saving..." : "Add Item"}
@@ -435,14 +442,18 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
             <label className="text-[0.8125rem] font-medium text-ink">Title *</label>
             <Input value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} required />
           </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Description</label>
-            <Textarea rows={2} value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
-            <Textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} />
-          </div>
+          {!needsSchedule(editForm.category, editForm.status) && (
+            <>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Description</label>
+                <Textarea rows={2} value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Notes</label>
+                <Textarea rows={2} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} />
+              </div>
+            </>
+          )}
           <DialogFooter>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Saving..." : "Save Changes"}

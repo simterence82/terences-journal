@@ -55,7 +55,7 @@ const STATUS_DOT_CLASS: Record<AttendanceStatus, string> = {
 
 const LOW_ATTENDANCE_THRESHOLD = 70;
 
-type Tab = "mark" | "calendar" | "leave" | "history" | "summary";
+type Tab = "mark" | "calendar" | "leave" | "pendingLeave" | "history" | "summary";
 
 function csvEscape(value: string): string {
   return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -110,6 +110,10 @@ export const AttendancePage: React.FC = () => {
 
   const records = attendanceQuery.data ?? [];
   const designers = designersQuery.data ?? [];
+  const pendingLeaveRecords = useMemo(
+    () => records.filter((r) => r.status === "leave" && r.leaveApproval === "pending").sort((a, b) => (a.date < b.date ? -1 : 1)),
+    [records]
+  );
 
   const recordForDate = useMemo(() => {
     const map = new Map<string, (typeof records)[number]>();
@@ -190,6 +194,7 @@ export const AttendancePage: React.FC = () => {
     ? [
         { value: "mark", label: "Mark Today" },
         { value: "calendar", label: "Calendar" },
+        { value: "pendingLeave", label: "Pending Leave Applications", count: pendingLeaveRecords.length },
         { value: "history", label: "History" },
         { value: "summary", label: "Summary" },
       ]
@@ -428,11 +433,57 @@ export const AttendancePage: React.FC = () => {
         </div>
       )}
 
+      {tab === "pendingLeave" && isAdmin && (
+        <div className="flex flex-col gap-3">
+          {attendanceQuery.isLoading ? (
+            <Skeleton style={{ height: 160 }} />
+          ) : pendingLeaveRecords.length === 0 ? (
+            <EmptyState icon={<CalendarCheck size={26} />} message="No pending leave applications." />
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-line bg-panel shadow-sm">
+              <table className="w-full text-[0.8125rem]">
+                <thead className="bg-surface">
+                  <tr>
+                    {["Designer", "Date", "Reason", "Notes", "Decision"].map((h) => (
+                      <th key={h} className="border-b border-line px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingLeaveRecords.map((r) => (
+                    <tr key={r.id} className="hover:bg-surface">
+                      <td className="border-b border-line px-4 py-3 text-ink">{r.designerName}</td>
+                      <td className="border-b border-line px-4 py-3 text-ink">
+                        {new Date(`${r.date}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                      <td className="border-b border-line px-4 py-3 text-faint-ink">{r.reason ? ATTENDANCE_REASON_LABELS[r.reason] : "—"}</td>
+                      <td className="border-b border-line px-4 py-3 text-faint-ink">{r.notes ?? "—"}</td>
+                      <td className="border-b border-line px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Button variant="soft" size="sm" onClick={() => handleApprove(r, "approved")}>
+                            <Check size={14} /> Approve
+                          </Button>
+                          <Button variant="danger" size="sm" onClick={() => handleApprove(r, "rejected")}>
+                            <XIcon size={14} /> Reject
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       {tab === "history" && (
         <div className="flex flex-col gap-3">
           {attendanceQuery.isLoading ? (
             <Skeleton style={{ height: 160 }} />
-          ) : records.length === 0 ? (
+          ) : records.filter((r) => !(r.status === "leave" && r.leaveApproval === "pending")).length === 0 ? (
             <EmptyState icon={<CalendarCheck size={26} />} message="No attendance recorded yet." />
           ) : (
             <div className="overflow-x-auto rounded-xl border border-line bg-panel shadow-sm">
@@ -447,7 +498,9 @@ export const AttendancePage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((r) => (
+                  {records
+                    .filter((r) => !(r.status === "leave" && r.leaveApproval === "pending"))
+                    .map((r) => (
                     <tr key={r.id} className="hover:bg-surface">
                       <td className="border-b border-line px-4 py-3 text-ink">
                         {new Date(`${r.date}T00:00:00`).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
@@ -461,12 +514,24 @@ export const AttendancePage: React.FC = () => {
                         {r.leaveApproval ? (
                           <div className="flex items-center gap-2">
                             <Badge variant={APPROVAL_VARIANT[r.leaveApproval]}>{LEAVE_APPROVAL_LABELS[r.leaveApproval]}</Badge>
-                            {isAdmin && r.leaveApproval === "pending" && (
+                            {isAdmin && (
                               <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" aria-label="Approve leave" onClick={() => handleApprove(r, "approved")}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Approve leave"
+                                  disabled={r.leaveApproval === "approved"}
+                                  onClick={() => handleApprove(r, "approved")}
+                                >
                                   <Check size={14} className="text-ok" />
                                 </Button>
-                                <Button variant="ghost" size="icon" aria-label="Reject leave" onClick={() => handleApprove(r, "rejected")}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Reject leave"
+                                  disabled={r.leaveApproval === "rejected"}
+                                  onClick={() => handleApprove(r, "rejected")}
+                                >
                                   <XIcon size={14} className="text-bad" />
                                 </Button>
                               </div>

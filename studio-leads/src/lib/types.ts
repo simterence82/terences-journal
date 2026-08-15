@@ -231,7 +231,7 @@ export const SHOWROOM_CATEGORY_LABELS: Record<ShowroomCategory, string> = {
   other: "Other",
 };
 
-export const SHOWROOM_STATUSES = ["ok", "low_stock", "needs_attention", "faulty", "servicing_scheduled", "resolved"] as const;
+export const SHOWROOM_STATUSES = ["ok", "low_stock", "needs_attention", "faulty", "servicing_needed", "servicing_scheduled", "resolved"] as const;
 export type ShowroomStatus = (typeof SHOWROOM_STATUSES)[number];
 
 export const SHOWROOM_STATUS_LABELS: Record<ShowroomStatus, string> = {
@@ -239,13 +239,20 @@ export const SHOWROOM_STATUS_LABELS: Record<ShowroomStatus, string> = {
   low_stock: "Low Stock",
   needs_attention: "Needs Attention",
   faulty: "Faulty",
+  servicing_needed: "Servicing Needed",
   servicing_scheduled: "Servicing Scheduled",
   resolved: "Resolved",
 };
 
 // Statuses that mean "this still needs someone to do something about it".
-export const OPEN_SHOWROOM_STATUSES: ShowroomStatus[] = ["low_stock", "needs_attention", "faulty", "servicing_scheduled"];
+export const OPEN_SHOWROOM_STATUSES: ShowroomStatus[] = ["low_stock", "needs_attention", "faulty", "servicing_needed", "servicing_scheduled"];
 export const CLOSED_SHOWROOM_STATUSES: ShowroomStatus[] = ["ok", "resolved"];
+
+// The subset of statuses offered when first adding an Aircon & Servicing
+// item -- deliberately excludes "resolved"/"ok" (nothing's been done yet)
+// and the other categories' statuses. Admin flips it to "Resolved" via the
+// full status list in the edit dialog once the servicing/repair is done.
+export const AIRCON_ADD_STATUSES: ShowroomStatus[] = ["servicing_needed", "servicing_scheduled", "faulty", "needs_attention"];
 
 export interface ShowroomItem {
   id: string;
