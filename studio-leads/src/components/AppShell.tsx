@@ -52,9 +52,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       <header className="sticky top-0 z-[200] border-b border-line bg-panel/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-2.5">
-            <span className="h-7 w-[3px] shrink-0 rounded-full bg-accent" />
             <span className="font-display text-[1.2rem] font-bold uppercase leading-none tracking-[0.12em] text-ink">
-              Form <span className="text-accent">&amp;</span> Space
+              Form &amp; Space
             </span>
           </div>
 
