@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, PackageX, Plus, Sparkles, Store, Trash2, Wrench, Pencil } from "lucide-react";
+import { AlertTriangle, PackageX, Plus, Sparkles, Store, Trash2, Wrench, Pencil, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import {
   useShowroomItemsList,
@@ -13,6 +13,7 @@ import {
   SHOWROOM_CATEGORY_LABELS,
   SHOWROOM_STATUSES,
   SHOWROOM_STATUS_LABELS,
+  OPEN_SHOWROOM_STATUSES,
   isAdminRole,
   type ShowroomCategory,
   type ShowroomItem,
@@ -57,20 +58,24 @@ export const ShowroomPage: React.FC = () => {
   return isAdmin ? <AdminShowroomView items={items} isLoading={listQuery.isLoading} /> : <DesignerIssueReportView items={items} isLoading={listQuery.isLoading} />;
 };
 
-/** Super admin / admin: full tracker across every category, with edit/delete/status control. */
+type AdminTab = "overview" | ShowroomCategory;
+
+/**
+ * Super admin / admin: each category is its own dedicated page -- picking
+ * a tab swaps the whole page content, not just a filter on a shared list.
+ * "Overview" is a separate landing tab with the cross-category dashboard.
+ */
 const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }> = ({ items, isLoading }) => {
   const createMutation = useCreateShowroomItem();
   const updateMutation = useUpdateShowroomItem();
   const deleteMutation = useDeleteShowroomItem();
   const deleteTarget = useConfirmDialog<ShowroomItem>();
 
-  const [categoryFilter, setCategoryFilter] = useState<"all" | ShowroomCategory>("all");
+  const [tab, setTab] = useState<AdminTab>("overview");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<ShowroomItem | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
-
-  const visibleItems = categoryFilter === "all" ? items : items.filter((i) => i.category === categoryFilter);
 
   const counts = useMemo(
     () => ({
@@ -81,8 +86,17 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
     }),
     [items]
   );
+  const openItems = useMemo(
+    () => items.filter((i) => OPEN_SHOWROOM_STATUSES.includes(i.status)).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    [items]
+  );
 
   const resetForm = () => setForm(EMPTY_FORM);
+
+  const openAddDialog = (category?: ShowroomCategory) => {
+    setForm({ ...EMPTY_FORM, category: category ?? EMPTY_FORM.category });
+    setIsAddOpen(true);
+  };
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,97 +149,142 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
     });
   };
 
+  const activeCategory = tab === "overview" ? null : tab;
+  const categoryItems = activeCategory ? items.filter((i) => i.category === activeCategory) : [];
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-semibold text-ink">Showroom</h1>
-          <p className="mt-1 text-[0.9375rem] text-faint-ink">Stock, equipment, and issues at the showroom</p>
-        </div>
-        <Button onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Add Item
-        </Button>
+      <div>
+        <h1 className="font-display text-3xl font-semibold text-ink">Showroom</h1>
+        <p className="mt-1 text-[0.9375rem] text-faint-ink">Stock, equipment, and issues at the showroom</p>
       </div>
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} style={{ height: 96 }} />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard label="Low Stock" value={counts.lowStock} icon={<PackageX size={16} />} tone={counts.lowStock > 0 ? "warn" : "ok"} />
-          <SummaryCard label="Needs Attention" value={counts.needsAttention} icon={<AlertTriangle size={16} />} tone={counts.needsAttention > 0 ? "warn" : "ok"} />
-          <SummaryCard label="Faulty" value={counts.faulty} icon={<Wrench size={16} />} tone={counts.faulty > 0 ? "bad" : "ok"} />
-          <SummaryCard label="Servicing Scheduled" value={counts.servicing} icon={<Sparkles size={16} />} tone="accent" />
-        </div>
-      )}
-
       <Tabs
-        value={categoryFilter}
-        onValueChange={(v) => setCategoryFilter(v as typeof categoryFilter)}
+        value={tab}
+        onValueChange={(v) => setTab(v as AdminTab)}
         options={[
-          { value: "all", label: "All", count: items.length },
+          { value: "overview", label: "Overview" },
           ...SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c], count: items.filter((i) => i.category === c).length })),
         ]}
         className="flex-wrap"
       />
 
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} style={{ height: 150 }} />
-          ))}
-        </div>
-      ) : visibleItems.length === 0 ? (
-        <EmptyState icon={<Store size={28} />} message="Nothing tracked here yet." />
-      ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleItems.map((item) => (
-            <div key={item.id} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex flex-col gap-1">
-                  <Badge variant="outline" className="w-fit">{SHOWROOM_CATEGORY_LABELS[item.category]}</Badge>
-                  <span className="text-[0.9375rem] font-semibold text-ink">{item.title}</span>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit item">
-                    <Pencil size={16} />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(item)} aria-label="Delete item">
-                    <Trash2 size={16} />
-                  </Button>
-                </div>
-              </div>
-              {item.description && <p className="text-[0.8125rem] leading-relaxed text-faint-ink">{item.description}</p>}
-              <Select
-                value={item.status}
-                onValueChange={(v) => quickSetStatus(item, v as ShowroomStatus)}
-                options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
-              />
-              <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-faint-ink">
-                <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
-                <span>
-                  {item.reportedByName ?? "Studio"} · {formatDate(item.createdAt)}
-                </span>
-              </div>
-              {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
+      {tab === "overview" ? (
+        <div className="flex flex-col gap-6">
+          {isLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} style={{ height: 96 }} />
+              ))}
             </div>
-          ))}
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <SummaryCard label="Low Stock" value={counts.lowStock} icon={<PackageX size={16} />} tone={counts.lowStock > 0 ? "warn" : "ok"} />
+              <SummaryCard label="Needs Attention" value={counts.needsAttention} icon={<AlertTriangle size={16} />} tone={counts.needsAttention > 0 ? "warn" : "ok"} />
+              <SummaryCard label="Faulty" value={counts.faulty} icon={<Wrench size={16} />} tone={counts.faulty > 0 ? "bad" : "ok"} />
+              <SummaryCard label="Servicing Scheduled" value={counts.servicing} icon={<Sparkles size={16} />} tone="accent" />
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3">
+            <h2 className="font-display text-lg font-semibold text-ink">Needs Attention</h2>
+            {isLoading ? (
+              <Skeleton style={{ height: 160 }} />
+            ) : openItems.length === 0 ? (
+              <EmptyState icon={<Sparkles size={26} />} message="Nothing open right now. Showroom's all clear." />
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-line bg-panel shadow-sm">
+                <table className="w-full text-[0.8125rem]">
+                  <thead className="bg-surface">
+                    <tr>
+                      {["Item", "Category", "Status", "Reported"].map((h) => (
+                        <th key={h} className="border-b border-line px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openItems.map((item) => (
+                      <tr key={item.id} className="cursor-pointer hover:bg-surface" onClick={() => setTab(item.category)}>
+                        <td className="border-b border-line px-4 py-3 font-medium text-ink">{item.title}</td>
+                        <td className="border-b border-line px-4 py-3 text-faint-ink">{SHOWROOM_CATEGORY_LABELS[item.category]}</td>
+                        <td className="border-b border-line px-4 py-3">
+                          <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
+                        </td>
+                        <td className="border-b border-line px-4 py-3 text-faint-ink">{formatDate(item.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold text-ink">{SHOWROOM_CATEGORY_LABELS[activeCategory!]}</h2>
+            <Button onClick={() => openAddDialog(activeCategory!)}>
+              <Plus size={16} /> Add to {SHOWROOM_CATEGORY_LABELS[activeCategory!]}
+            </Button>
+          </div>
+
+          {isLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} style={{ height: 150 }} />
+              ))}
+            </div>
+          ) : categoryItems.length === 0 ? (
+            <EmptyState icon={<LayoutGrid size={28} />} message={`Nothing tracked under ${SHOWROOM_CATEGORY_LABELS[activeCategory!]} yet.`} />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {categoryItems.map((item) => (
+                <div key={item.id} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[0.9375rem] font-semibold text-ink">{item.title}</span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit item">
+                        <Pencil size={16} />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(item)} aria-label="Delete item">
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                  {item.description && <p className="text-[0.8125rem] leading-relaxed text-faint-ink">{item.description}</p>}
+                  <Select
+                    value={item.status}
+                    onValueChange={(v) => quickSetStatus(item, v as ShowroomStatus)}
+                    options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
+                  />
+                  <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-faint-ink">
+                    <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
+                    <span>
+                      {item.reportedByName ?? "Studio"} · {formatDate(item.createdAt)}
+                    </span>
+                  </div>
+                  {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
         <DialogHeader>
-          <DialogTitle>Add Showroom Item</DialogTitle>
+          <DialogTitle>{activeCategory ? `Add to ${SHOWROOM_CATEGORY_LABELS[activeCategory]}` : "Add Showroom Item"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleCreate} className="flex flex-col gap-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Category</label>
-              <Select value={form.category} onValueChange={(v) => setForm((p) => ({ ...p, category: v as ShowroomCategory }))} options={SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c] }))} />
-            </div>
+            {!activeCategory && (
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-ink">Category</label>
+                <Select value={form.category} onValueChange={(v) => setForm((p) => ({ ...p, category: v as ShowroomCategory }))} options={SHOWROOM_CATEGORIES.map((c) => ({ value: c, label: SHOWROOM_CATEGORY_LABELS[c] }))} />
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-ink">Status</label>
               <Select value={form.status} onValueChange={(v) => setForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
@@ -301,7 +360,7 @@ const AdminShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }>
  * Designer: scoped to the "faulty_report" category only (enforced by
  * firestore.rules, not just this UI) -- they can see what's been reported
  * and report new issues, but every other category and all status/edit
- * controls are admin-only.
+ * controls are admin-only. Only one category exists for them, so no tabs.
  */
 const DesignerIssueReportView: React.FC<{ items: ShowroomItem[]; isLoading: boolean }> = ({ items, isLoading }) => {
   const createMutation = useCreateShowroomItem();
