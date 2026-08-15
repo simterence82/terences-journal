@@ -17,6 +17,7 @@ import {
 import { useAuth } from "../lib/AuthContext";
 import { useThemeMode } from "../lib/useThemeMode";
 import { Badge } from "./Badge";
+import { BrandMark } from "./BrandMark";
 import { USER_ROLE_LABELS, type UserRole } from "../lib/types";
 
 const NAV_ITEMS = [
@@ -53,7 +54,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-brand-ink shadow-sm">
-              <Handshake size={18} />
+              <BrandMark className="h-5 w-5" />
             </span>
             <span className="font-display text-lg font-semibold leading-tight text-ink">Studio Leads</span>
           </div>
