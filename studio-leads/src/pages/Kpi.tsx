@@ -169,20 +169,20 @@ const KpiCard: React.FC<{ kpi: DesignerKpi }> = ({ kpi }) => {
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+        <div className="min-w-[8rem] flex-1">
           <h3 className="font-display text-lg font-semibold text-ink">{kpi.designerName}</h3>
           <p className="text-xs text-faint-ink">{kpi.leadsAssigned} leads assigned this period</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2.5">
           <div className="text-right">
-            <div className="font-display text-3xl font-semibold leading-none text-ink tabular-nums">
+            <div className="font-display text-2xl font-semibold leading-none text-ink tabular-nums">
               {kpi.commitmentScore !== null ? Math.round(kpi.commitmentScore) : "—"}
             </div>
             <div className="text-[0.6875rem] text-faint-ink">/ 100</div>
           </div>
           {grade && (
-            <Badge variant={grade.tone} className="text-sm">
+            <Badge variant={grade.tone} className="whitespace-nowrap text-xs">
               {grade.letter} · {grade.label}
             </Badge>
           )}
