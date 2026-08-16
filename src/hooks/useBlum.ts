@@ -24,6 +24,7 @@ function toBlumPurchase(id: string, data: Record<string, any>): BlumPurchase {
     amount: data.amount,
     date: data.date,
     paidToSeller: data.paidToSeller,
+    invoiceRequested: data.invoiceRequested,
     reimbursed: data.reimbursed,
     notes: data.notes,
     createdBy: data.createdBy,
@@ -56,6 +57,7 @@ export const useCreateBlum = () => {
       const ref = await addDoc(collection(db, COLLECTION), {
         ...input,
         paidToSeller: false,
+        invoiceRequested: false,
         reimbursed: false,
         createdBy: auth.currentUser?.uid ?? null,
         createdAt: serverTimestamp(),
@@ -74,7 +76,7 @@ export const useUpdateBlum = () => {
     mutationFn: async ({
       id,
       ...updates
-    }: { id: string } & Partial<BlumCreateInput> & { paidToSeller?: boolean; reimbursed?: boolean }) => {
+    }: { id: string } & Partial<BlumCreateInput> & { paidToSeller?: boolean; invoiceRequested?: boolean; reimbursed?: boolean }) => {
       const ref = doc(db, COLLECTION, id);
       await updateDoc(ref, updates);
       const snap = await getDoc(ref);

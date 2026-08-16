@@ -38,6 +38,7 @@ export interface BlumPurchase {
   amount: number;
   date: string;
   paidToSeller: boolean;
+  invoiceRequested: boolean;
   reimbursed: boolean;
   notes: string | null;
   createdBy: string | null;

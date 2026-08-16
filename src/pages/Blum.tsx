@@ -59,7 +59,7 @@ export const BlumPage: React.FC = () => {
     );
   };
 
-  const toggleField = (id: string, field: "paidToSeller" | "reimbursed", current: boolean) => {
+  const toggleField = (id: string, field: "paidToSeller" | "invoiceRequested" | "reimbursed", current: boolean) => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
   };
 
@@ -129,7 +129,7 @@ export const BlumPage: React.FC = () => {
           <table className="w-full whitespace-nowrap text-[0.8125rem]">
             <thead className="bg-surface">
               <tr>
-                {["Date", "Order Name", "Amount", "Notes", "Paid", "Reimbursed", ""].map((h) => (
+                {["Date", "Order Name", "Amount", "Notes", "Paid", "Invoice Requested", "Reimbursed", ""].map((h) => (
                   <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
                     {h}
                   </th>
@@ -145,6 +145,9 @@ export const BlumPage: React.FC = () => {
                   <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
                   <td className="border-b border-border px-4 py-3">
                     <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
+                  </td>
+                  <td className="border-b border-border px-4 py-3">
+                    <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} />
                   </td>
                   <td className="border-b border-border px-4 py-3">
                     <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
