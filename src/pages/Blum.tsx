@@ -17,6 +17,7 @@ import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 
 const EMPTY_FORM = { orderName: "", amount: "", date: new Date().toISOString().slice(0, 10), notes: "" };
+const CHECKBOX_COLUMNS = ["Paid", "Invoice Requested", "Reimbursed"];
 
 export const BlumPage: React.FC = () => {
   const { authState } = useAuth();
@@ -130,7 +131,12 @@ export const BlumPage: React.FC = () => {
             <thead className="bg-surface">
               <tr>
                 {["Date", "Order Name", "Amount", "Notes", "Paid", "Invoice Requested", "Reimbursed", ""].map((h) => (
-                  <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th
+                    key={h}
+                    className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
+                      CHECKBOX_COLUMNS.includes(h) ? "text-center" : "text-left"
+                    }`}
+                  >
                     {h}
                   </th>
                 ))}
@@ -143,13 +149,13 @@ export const BlumPage: React.FC = () => {
                   <td className="border-b border-border px-4 py-3 text-foreground">{entry.orderName}</td>
                   <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.amount)}</td>
                   <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                  <td className="border-b border-border px-4 py-3">
+                  <td className="border-b border-border px-4 py-3 text-center">
                     <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
                   </td>
-                  <td className="border-b border-border px-4 py-3">
+                  <td className="border-b border-border px-4 py-3 text-center">
                     <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} />
                   </td>
-                  <td className="border-b border-border px-4 py-3">
+                  <td className="border-b border-border px-4 py-3 text-center">
                     <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
                   </td>
                   {isAdmin && (

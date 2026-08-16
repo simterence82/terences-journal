@@ -27,6 +27,7 @@ const EMPTY_FORM = {
   selling: "",
   notes: "",
 };
+const CHECKBOX_COLUMNS = ["Paid", "Reimbursed"];
 
 export const LightingPage: React.FC = () => {
   const { authState } = useAuth();
@@ -165,7 +166,12 @@ export const LightingPage: React.FC = () => {
             <thead className="bg-surface">
               <tr>
                 {["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Notes", "Paid", "Reimbursed", ""].map((h) => (
-                  <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th
+                    key={h}
+                    className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
+                      CHECKBOX_COLUMNS.includes(h) ? "text-center" : "text-left"
+                    }`}
+                  >
                     {h}
                   </th>
                 ))}
@@ -184,10 +190,10 @@ export const LightingPage: React.FC = () => {
                   <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.commissionGiven)}</td>
                   <td className="border-b border-border px-4 py-3 text-foreground">{entry.commissionRecipient || "-"}</td>
                   <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                  <td className="border-b border-border px-4 py-3">
+                  <td className="border-b border-border px-4 py-3 text-center">
                     <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
                   </td>
-                  <td className="border-b border-border px-4 py-3">
+                  <td className="border-b border-border px-4 py-3 text-center">
                     <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
                   </td>
                   {isAdmin && (
