@@ -206,6 +206,21 @@ export interface AttendanceRecord {
   mcFileId: string | null;
 }
 
+// A designer's sales target for one calendar month -- the atomic unit
+// admin/super admin set targets in. Viewing by year or a custom date range
+// (see Kpi.tsx) sums whichever monthly targets fall in that window rather
+// than storing a second, potentially-inconsistent number.
+export interface SalesTarget {
+  id: string; // "{designerId}_{monthKey}"
+  designerId: string;
+  designerName: string;
+  monthKey: string; // "YYYY-MM"
+  targetAmount: number;
+  setBy: string | null;
+  setByName: string | null;
+  updatedAt: string | null;
+}
+
 // Where an uploaded file lives in the Files Archive. Only "medical
 // certificate" is actually produced by any flow today (marking a day
 // "mc"); the other two exist so the archive isn't a dead end once other

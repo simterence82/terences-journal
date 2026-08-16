@@ -125,7 +125,10 @@ export function computeDesignerKpi(
   const signed = closedInPeriod.filter((l) => l.status === "signed");
   const rejected = closedInPeriod.filter((l) => l.status === "rejected");
   const conversionRate = signed.length + rejected.length > 0 ? (signed.length / (signed.length + rejected.length)) * 100 : null;
-  const signedValue = signed.reduce((sum, l) => sum + (l.quotationAmount ?? 0), 0);
+  // contractAmount is the real signed value (frozen once closed); fall back
+  // to quotationAmount only for old data that predates the Contract Amount
+  // field.
+  const signedValue = signed.reduce((sum, l) => sum + (l.contractAmount ?? l.quotationAmount ?? 0), 0);
 
   // Attendance: present/late/half-day count toward showing up; leave and
   // MC are excluded (documented absence shouldn't count against

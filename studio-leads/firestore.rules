@@ -186,5 +186,13 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isAdmin();
     }
+
+    // Sales targets (KPI & Grading's sidebar): one doc per designer per
+    // month. Admin-only in every direction -- designers don't see targets
+    // at all, matching the "for admin and super admin" product decision.
+    match /salesTargets/{id} {
+      allow get, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
