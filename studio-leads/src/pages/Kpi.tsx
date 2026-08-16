@@ -189,7 +189,7 @@ const KpiCard: React.FC<{ kpi: DesignerKpi }> = ({ kpi }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 border-t border-line pt-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 border-t border-line pt-4">
         <Stat label="Response" value={pct(kpi.responseRate)} sub={`${kpi.responseSampleSize} judged`} />
         <Stat label="Follow-up" value={pct(kpi.followUpComplianceRate)} sub={`${kpi.overdueOpenLeads}/${kpi.openLeadsTracked} overdue`} />
         <Stat label="Conversion" value={pct(kpi.conversionRate)} sub={`${kpi.signedCount}W / ${kpi.rejectedCount}L`} />
