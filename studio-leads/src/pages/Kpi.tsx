@@ -48,6 +48,23 @@ function yearBounds(year: string): { from: string; to: string } {
   return { from: `${year}-01-01`, to: `${year}-12-31` };
 }
 
+function daysInMonth(monthKey: string): number {
+  const [y, m] = monthKey.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+/** How many days of `monthKey` fall inside [from, to] -- 0 if none. Used to
+    prorate that month's target down to a strict custom-range window. */
+function overlapDays(monthKey: string, from: string, to: string): number {
+  const bounds = monthBounds(monthKey);
+  const start = bounds.from > from ? bounds.from : from;
+  const end = bounds.to < to ? bounds.to : to;
+  if (start > end) return 0;
+  const startMs = new Date(`${start}T00:00:00`).getTime();
+  const endMs = new Date(`${end}T00:00:00`).getTime();
+  return Math.round((endMs - startMs) / (1000 * 60 * 60 * 24)) + 1;
+}
+
 /** Sum of contractAmount (the real signed value, before GST) for signed
     leads closed within [from, to] -- optionally scoped to one designer. */
 function signedSum(leads: Lead[], from: string, to: string, designerId?: string): number {
@@ -223,14 +240,23 @@ const SalesTargetSidebar: React.FC<{ leads: Lead[]; designers: { id: string; dis
     return map;
   }, [targets]);
 
+  // Month and Year both select whole calendar months, so their target is
+  // just the sum of those months' numbers. Range can start/end mid-month,
+  // so it prorates each touched month's target by how many of its days
+  // actually fall inside [from, to] -- a 3-day range only ever counts
+  // 3/31st of that month's target, never the whole thing.
   const rows = useMemo(
     () =>
       designers.map((d) => {
         const actual = signedSum(leads, from, to, d.id);
-        const target = relevantMonthKeys.reduce((sum, mk) => sum + (targetsByKey.get(`${d.id}_${mk}`) ?? 0), 0);
+        const target = relevantMonthKeys.reduce((sum, mk) => {
+          const monthlyTarget = targetsByKey.get(`${d.id}_${mk}`) ?? 0;
+          if (mode !== "range") return sum + monthlyTarget;
+          return sum + monthlyTarget * (overlapDays(mk, from, to) / daysInMonth(mk));
+        }, 0);
         return { designer: d, actual, target };
       }),
-    [designers, leads, from, to, relevantMonthKeys, targetsByKey]
+    [designers, leads, from, to, relevantMonthKeys, targetsByKey, mode]
   );
 
   const totalActual = rows.reduce((sum, r) => sum + r.actual, 0);
