@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Lightbulb, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Pencil, Lightbulb, DollarSign, Clock, RotateCcw } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useLightingList, useCreateLighting, useUpdateLighting, useDeleteLighting } from "../hooks/useLighting";
@@ -15,6 +15,7 @@ import { Checkbox } from "../components/Checkbox";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import type { LightingPurchase } from "../lib/types";
 
 const EMPTY_FORM = {
   brand: "",
@@ -42,6 +43,8 @@ export const LightingPage: React.FC = () => {
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingEntry, setEditingEntry] = useState<LightingPurchase | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
 
   const entries = listQuery.data ?? [];
   const totalProfit = entries.reduce((sum, e) => sum + (e.selling - e.cost), 0);
@@ -50,6 +53,7 @@ export const LightingPage: React.FC = () => {
 
   const setField = (key: keyof typeof EMPTY_FORM) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const resetForm = () => setForm(EMPTY_FORM);
+  const setEditField = (key: keyof typeof EMPTY_FORM) => (value: string) => setEditForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +86,51 @@ export const LightingPage: React.FC = () => {
 
   const toggleField = (id: string, field: "paidToSeller" | "reimbursed", current: boolean) => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
+  };
+
+  const openEdit = (entry: LightingPurchase) => {
+    setEditingEntry(entry);
+    setEditForm({
+      brand: entry.brand,
+      clientName: entry.clientName,
+      address: entry.address,
+      date: entry.date.slice(0, 10),
+      commissionGiven: String(entry.commissionGiven),
+      commissionRecipient: entry.commissionRecipient ?? "",
+      cost: String(entry.cost),
+      selling: String(entry.selling),
+      notes: entry.notes ?? "",
+    });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+    if (!editForm.brand || !editForm.clientName || !editForm.address || !editForm.date) {
+      toast.error("Brand, client name, address, and date are required");
+      return;
+    }
+    updateMutation.mutate(
+      {
+        id: editingEntry.id,
+        brand: editForm.brand,
+        clientName: editForm.clientName,
+        address: editForm.address,
+        date: editForm.date,
+        commissionGiven: Number(editForm.commissionGiven) || 0,
+        commissionRecipient: editForm.commissionRecipient || null,
+        cost: Number(editForm.cost) || 0,
+        selling: Number(editForm.selling) || 0,
+        notes: editForm.notes || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Lighting purchase updated");
+          setEditingEntry(null);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update entry"),
+      }
+    );
   };
 
   const handleDelete = async () => {
@@ -147,6 +196,47 @@ export const LightingPage: React.FC = () => {
         </form>
       </Dialog>
 
+      <Dialog open={editingEntry !== null} onOpenChange={(open) => !open && setEditingEntry(null)}>
+        <DialogHeader>
+          <DialogTitle>Edit Lighting Purchase</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
+          <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={editForm.brand} onChange={setEditField("brand")} />
+          <AutoCompleteField label="Client Name" required options={lookupsQuery.data?.clientNames ?? []} value={editForm.clientName} onChange={setEditField("clientName")} />
+          <AutoCompleteField label="Address" required options={lookupsQuery.data?.addresses ?? []} value={editForm.address} onChange={setEditField("address")} />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
+              <Input type="date" value={editForm.date} onChange={(e) => setEditField("date")(e.target.value)} required />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Commission Given (S$)</label>
+              <Input type="number" min="0" step="0.01" value={editForm.commissionGiven} onChange={(e) => setEditField("commissionGiven")(e.target.value)} placeholder="0.00" />
+            </div>
+          </div>
+          <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={editForm.commissionRecipient} onChange={setEditField("commissionRecipient")} />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Cost (S$)</label>
+              <Input type="number" min="0" step="0.01" value={editForm.cost} onChange={(e) => setEditField("cost")(e.target.value)} placeholder="0.00" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
+              <Input type="number" min="0" step="0.01" value={editForm.selling} onChange={(e) => setEditField("selling")(e.target.value)} placeholder="0.00" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
+            <Textarea value={editForm.notes} onChange={(e) => setEditField("notes")(e.target.value)} rows={3} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Total Entries" value={entries.length} icon={<Lightbulb size={18} />} />
         <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} icon={<DollarSign size={18} />} />
@@ -198,9 +288,14 @@ export const LightingPage: React.FC = () => {
                   </td>
                   {isAdmin && (
                     <td className="border-b border-border px-4 py-3">
-                      <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
-                        <Trash2 size={16} />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
+                          <Pencil size={16} />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </td>
                   )}
                 </tr>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Package, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Pencil, Package, DollarSign, Clock, RotateCcw } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useBlumList, useCreateBlum, useUpdateBlum, useDeleteBlum } from "../hooks/useBlum";
@@ -15,6 +15,7 @@ import { Checkbox } from "../components/Checkbox";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import type { BlumPurchase } from "../lib/types";
 
 const EMPTY_FORM = { orderName: "", amount: "", date: new Date().toISOString().slice(0, 10), notes: "" };
 const CHECKBOX_COLUMNS = ["Paid", "Invoice Requested", "Reimbursed"];
@@ -32,6 +33,8 @@ export const BlumPage: React.FC = () => {
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingEntry, setEditingEntry] = useState<BlumPurchase | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
 
   const entries = listQuery.data ?? [];
   const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
@@ -62,6 +65,36 @@ export const BlumPage: React.FC = () => {
 
   const toggleField = (id: string, field: "paidToSeller" | "invoiceRequested" | "reimbursed", current: boolean) => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
+  };
+
+  const openEdit = (entry: BlumPurchase) => {
+    setEditingEntry(entry);
+    setEditForm({ orderName: entry.orderName, amount: String(entry.amount), date: entry.date.slice(0, 10), notes: entry.notes ?? "" });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+    if (!editForm.orderName || !editForm.date) {
+      toast.error("Order name and date are required");
+      return;
+    }
+    updateMutation.mutate(
+      {
+        id: editingEntry.id,
+        orderName: editForm.orderName,
+        amount: Number(editForm.amount) || 0,
+        date: editForm.date,
+        notes: editForm.notes || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Order updated");
+          setEditingEntry(null);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update order"),
+      }
+    );
   };
 
   const handleDelete = async () => {
@@ -107,6 +140,34 @@ export const BlumPage: React.FC = () => {
           <DialogFooter>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? "Saving..." : "Save Order"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
+      <Dialog open={editingEntry !== null} onOpenChange={(open) => !open && setEditingEntry(null)}>
+        <DialogHeader>
+          <DialogTitle>Edit Blum Order</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
+          <AutoCompleteField label="Order Name" required options={lookupsQuery.data?.blumOrderNames ?? []} value={editForm.orderName} onChange={(v) => setEditForm((p) => ({ ...p, orderName: v }))} />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Amount (S$)</label>
+              <Input type="number" min="0" step="0.01" value={editForm.amount} onChange={(e) => setEditForm((p) => ({ ...p, amount: e.target.value }))} placeholder="0.00" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
+              <Input type="date" value={editForm.date} onChange={(e) => setEditForm((p) => ({ ...p, date: e.target.value }))} required />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
+            <Textarea value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} rows={3} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>
@@ -160,9 +221,14 @@ export const BlumPage: React.FC = () => {
                   </td>
                   {isAdmin && (
                     <td className="border-b border-border px-4 py-3">
-                      <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete order">
-                        <Trash2 size={16} />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit order">
+                          <Pencil size={16} />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete order">
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </td>
                   )}
                 </tr>
