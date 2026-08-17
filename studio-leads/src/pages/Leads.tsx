@@ -29,8 +29,10 @@ import {
   OPEN_TO_DESIGNERS,
   OPEN_TO_DESIGNERS_LABEL,
   PROJECT_TYPES,
+  SHARE_PERCENTAGE_OPTIONS,
   isAdminRole,
   type Lead,
+  type LeadShare,
   type LeadStatus,
 } from "../lib/types";
 
@@ -525,6 +527,8 @@ const LeadFullDetailDialog: React.FC<{
   const [quotationAmount, setQuotationAmount] = useState(lead.quotationAmount?.toString() ?? "");
   const [contractAmount, setContractAmount] = useState(lead.contractAmount?.toString() ?? "");
   const [gstApplicable, setGstApplicable] = useState<boolean | null>(lead.gstApplicable ?? null);
+  const [isShared, setIsShared] = useState<boolean | null>(lead.isShared ?? null);
+  const [sharedWith, setSharedWith] = useState<LeadShare[]>(lead.sharedWith ?? []);
   const [nextFollowUpDate, setNextFollowUpDate] = useState(lead.nextFollowUpDate ?? "");
   const [assignedTo, setAssignedTo] = useState(lead.assignedTo ?? OPEN_TO_DESIGNERS);
   const [notes, setNotes] = useState(lead.notes ?? "");
@@ -537,6 +541,8 @@ const LeadFullDetailDialog: React.FC<{
     setQuotationAmount(lead.quotationAmount?.toString() ?? "");
     setContractAmount(lead.contractAmount?.toString() ?? "");
     setGstApplicable(lead.gstApplicable ?? null);
+    setIsShared(lead.isShared ?? null);
+    setSharedWith(lead.sharedWith ?? []);
     setNextFollowUpDate(lead.nextFollowUpDate ?? "");
     setAssignedTo(lead.assignedTo ?? OPEN_TO_DESIGNERS);
     setNotes(lead.notes ?? "");
@@ -552,6 +558,24 @@ const LeadFullDetailDialog: React.FC<{
       toast.error("Contract amount is required once a lead is marked signed");
       return;
     }
+    if (isShared === null) {
+      toast.error("Select whether this lead is Solo or Sharing before saving changes");
+      return;
+    }
+    if (isShared) {
+      if (sharedWith.length === 0) {
+        toast.error("Select at least one designer to share this lead with, or switch to Solo");
+        return;
+      }
+      if (sharedWith.some((s) => !s.percentage)) {
+        toast.error("Choose a Percentage Of Project Profit for every designer you're sharing with");
+        return;
+      }
+      if (sharedWith.reduce((sum, s) => sum + s.percentage, 0) > 100) {
+        toast.error("Shared percentages can't add up to more than 100%");
+        return;
+      }
+    }
 
     const isOpenSelection = assignedTo === OPEN_TO_DESIGNERS;
     const designer = isOpenSelection ? null : designers.find((d) => d.id === assignedTo);
@@ -565,6 +589,8 @@ const LeadFullDetailDialog: React.FC<{
         quotationAmount: quotationAmount ? Number(quotationAmount) : null,
         contractAmount: contractAmount ? Number(contractAmount) : null,
         gstApplicable,
+        isShared,
+        sharedWith: isShared ? sharedWith : [],
         nextFollowUpDate: nextFollowUpDate || null,
         notes: notes || null,
         ...(assignmentChanged
@@ -713,6 +739,25 @@ const LeadFullDetailDialog: React.FC<{
             </Checkbox>
             <span className="text-faint-ink">Check, then Save Changes -- no follow-up note required.</span>
           </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-ink">Solo or Sharing? *</label>
+            <div className="flex items-center gap-5 text-[0.8125rem]">
+              <Checkbox className="font-medium text-ink" checked={isShared === false} onChange={(checked) => setIsShared(checked ? false : null)}>
+                Solo
+              </Checkbox>
+              <Checkbox className="font-medium text-ink" checked={isShared === true} onChange={(checked) => setIsShared(checked ? true : null)}>
+                Sharing
+              </Checkbox>
+            </div>
+            {isShared === true && (
+              <SharedDesignersPicker
+                designers={designers.filter((d) => d.id !== assignedTo)}
+                value={sharedWith}
+                onChange={setSharedWith}
+                assigneeName={designers.find((d) => d.id === assignedTo)?.displayName ?? lead.assignedToName ?? "the assignee"}
+              />
+            )}
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-ink">Quotation Amount (S$)</label>
@@ -732,15 +777,6 @@ const LeadFullDetailDialog: React.FC<{
           </div>
           {status === "signed" && (
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-ink">Contract Amount Before GST (S$) *</label>
-              <Input
-                type="number"
-                min="0"
-                value={contractAmount}
-                onChange={(e) => setContractAmount(e.target.value)}
-                placeholder="The actual signed contract value"
-                required
-              />
               <div className="flex items-center gap-5 text-[0.8125rem]">
                 <Checkbox
                   className="font-medium text-ink"
@@ -757,6 +793,8 @@ const LeadFullDetailDialog: React.FC<{
                   No GST
                 </Checkbox>
               </div>
+              <label className="text-[0.8125rem] font-medium text-ink">Contract Amount Before GST (S$) *</label>
+              <Input type="number" min="0" value={contractAmount} onChange={(e) => setContractAmount(e.target.value)} required />
             </div>
           )}
           <div className="flex flex-col gap-2">
@@ -846,5 +884,60 @@ const LeadFullDetailDialog: React.FC<{
         </div>
       </div>
     </Dialog>
+  );
+};
+
+/**
+ * Picker for a Sharing lead: who else (besides the assignee) gets a cut,
+ * and their exact "Percentage Of Project Profit". The assignee isn't
+ * offered here -- their own cut is whatever's left after the others'
+ * percentages, shown as a running hint below the list.
+ */
+const SharedDesignersPicker: React.FC<{
+  designers: { id: string; displayName: string }[];
+  value: LeadShare[];
+  onChange: (value: LeadShare[]) => void;
+  assigneeName: string;
+}> = ({ designers, value, onChange, assigneeName }) => {
+  const toggle = (d: { id: string; displayName: string }) => {
+    const already = value.find((s) => s.designerId === d.id);
+    onChange(already ? value.filter((s) => s.designerId !== d.id) : [...value, { designerId: d.id, designerName: d.displayName, percentage: 0 }]);
+  };
+  const setPercentage = (designerId: string, percentage: number) =>
+    onChange(value.map((s) => (s.designerId === designerId ? { ...s, percentage } : s)));
+
+  const totalOthersPct = value.reduce((sum, s) => sum + s.percentage, 0);
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3">
+      <span className="text-xs font-medium text-faint-ink">Share with (besides yourself) -- Percentage Of Project Profit</span>
+      {designers.length === 0 ? (
+        <p className="text-xs text-faint-ink">No other designers to share with.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {designers.map((d) => {
+            const entry = value.find((s) => s.designerId === d.id);
+            return (
+              <div key={d.id} className="flex flex-wrap items-center gap-3">
+                <Checkbox checked={!!entry} onChange={() => toggle(d)}>
+                  <span className="text-sm text-ink">{d.displayName}</span>
+                </Checkbox>
+                {entry && (
+                  <Select
+                    className="w-32"
+                    value={entry.percentage ? String(entry.percentage) : ""}
+                    onValueChange={(v) => setPercentage(d.id, Number(v))}
+                    options={[{ value: "", label: "% Profit" }, ...SHARE_PERCENTAGE_OPTIONS.map((p) => ({ value: String(p), label: `${p}%` }))]}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-xs text-faint-ink">
+        Remaining share for {assigneeName}: <span className="font-medium text-ink">{Math.max(0, 100 - totalOthersPct)}%</span>
+      </p>
+    </div>
   );
 };

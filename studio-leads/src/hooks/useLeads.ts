@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
-import { CLOSED_LEAD_STATUSES, isAdminRole, type Lead, type LeadStatus, type Viewer } from "../lib/types";
+import { CLOSED_LEAD_STATUSES, isAdminRole, type Lead, type LeadShare, type LeadStatus, type Viewer } from "../lib/types";
 
 const COLLECTION = "leads";
 
@@ -35,6 +35,8 @@ function toLead(id: string, data: Record<string, any>): Lead {
     quotationAmount: data.quotationAmount ?? null,
     contractAmount: data.contractAmount ?? null,
     gstApplicable: data.gstApplicable ?? null,
+    isShared: data.isShared ?? null,
+    sharedWith: data.sharedWith ?? [],
     nextFollowUpDate: data.nextFollowUpDate ?? null,
     firstContactedAt: toIso(data.firstContactedAt),
     closedAt: toIso(data.closedAt),
@@ -46,12 +48,13 @@ function toLead(id: string, data: Record<string, any>): Lead {
 }
 
 /**
- * A designer's leads are two separate queries merged client-side: their
- * own (where assignedTo == uid) plus the open-to-designers pool (where
- * assignedTo == null) -- required for firestore.rules' list rule (which
- * checks each returned doc) to allow either read at all. Firestore doesn't
- * support "in" with null, so this can't be a single query. Admins get
- * every lead in one query.
+ * A designer's leads are three separate queries merged client-side: their
+ * own (where assignedTo == uid), the open-to-designers pool (where
+ * assignedTo == null), and any lead shared with them (where sharedWithIds
+ * array-contains uid) -- required for firestore.rules' list rule (which
+ * checks each returned doc) to allow any of these reads at all. Firestore
+ * doesn't support "in" with null, so this can't be a single query. Admins
+ * get every lead in one query.
  */
 export const useLeadsList = (viewer: Viewer | null) =>
   useQuery({
@@ -62,11 +65,14 @@ export const useLeadsList = (viewer: Viewer | null) =>
       if (isAdminRole(viewer!.role)) {
         docs = (await getDocs(collection(db, COLLECTION))).docs;
       } else {
-        const [ownSnap, openSnap] = await Promise.all([
+        const [ownSnap, openSnap, sharedSnap] = await Promise.all([
           getDocs(query(collection(db, COLLECTION), where("assignedTo", "==", viewer!.id))),
           getDocs(query(collection(db, COLLECTION), where("assignedTo", "==", null))),
+          getDocs(query(collection(db, COLLECTION), where("sharedWithIds", "array-contains", viewer!.id))),
         ]);
-        docs = [...ownSnap.docs, ...openSnap.docs];
+        const byId = new Map<string, (typeof ownSnap.docs)[number]>();
+        for (const d of [...ownSnap.docs, ...openSnap.docs, ...sharedSnap.docs]) byId.set(d.id, d);
+        docs = [...byId.values()];
       }
       const items = docs.map((d) => toLead(d.id, d.data()));
       items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
@@ -111,6 +117,9 @@ export const useCreateLead = () => {
         quotationAmount: null,
         contractAmount: null,
         gstApplicable: null,
+        isShared: null,
+        sharedWith: [],
+        sharedWithIds: [],
         nextFollowUpDate: input.nextFollowUpDate,
         firstContactedAt: null,
         closedAt: null,
@@ -141,6 +150,8 @@ export interface LeadUpdateInput {
   quotationAmount?: number | null;
   contractAmount?: number | null;
   gstApplicable?: boolean | null;
+  isShared?: boolean | null;
+  sharedWith?: LeadShare[];
   nextFollowUpDate?: string | null;
 }
 
@@ -150,6 +161,13 @@ export const useUpdateLead = () => {
     mutationFn: async ({ id, ...updates }: LeadUpdateInput) => {
       const ref = doc(db, COLLECTION, id);
       const payload: Record<string, unknown> = { ...updates };
+
+      // Keep the flat id array (sharedWithIds) in sync with sharedWith --
+      // it's what firestore.rules and this hook's own query actually
+      // filter on, since Firestore can't query inside an array of objects.
+      if (updates.sharedWith !== undefined) {
+        payload.sharedWithIds = updates.sharedWith.map((s) => s.designerId);
+      }
 
       // Reassigning restarts the response-time clock for that designer.
       // (Reverting to open/null doesn't need a clock -- claiming does, see

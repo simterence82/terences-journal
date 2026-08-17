@@ -103,3 +103,15 @@ export const useDeleteShowroomItem = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
 };
+
+/** Bulk removal for the Resolved tab's multi-select delete (admin only --
+    firestore.rules enforces this regardless of what the UI offers). */
+export const useDeleteShowroomItems = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => deleteDoc(doc(db, COLLECTION, id))));
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+  });
+};

@@ -5,6 +5,7 @@ import {
   Handshake,
   CalendarCheck,
   Trophy,
+  Wallet,
   Megaphone,
   Store,
   Archive,
@@ -21,14 +22,15 @@ import { Badge } from "./Badge";
 import { USER_ROLE_LABELS, type UserRole } from "../lib/types";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, adminOnly: false },
-  { to: "/leads", label: "Leads", icon: Handshake, end: false, adminOnly: false },
-  { to: "/attendance", label: "Attendance", icon: CalendarCheck, end: false, adminOnly: false },
-  { to: "/kpi", label: "KPI & Grading", icon: Trophy, end: false, adminOnly: true },
-  { to: "/notice-board", label: "Notice Board", icon: Megaphone, end: false, adminOnly: false },
-  { to: "/showroom", label: "Showroom", icon: Store, end: false, adminOnly: false },
-  { to: "/files", label: "Files Archive", icon: Archive, end: false, adminOnly: false },
-  { to: "/users", label: "Users", icon: UsersIcon, end: false, adminOnly: true },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, adminOnly: false, designerOnly: false },
+  { to: "/leads", label: "Leads", icon: Handshake, end: false, adminOnly: false, designerOnly: false },
+  { to: "/attendance", label: "Attendance", icon: CalendarCheck, end: false, adminOnly: false, designerOnly: false },
+  { to: "/kpi", label: "KPI & Grading", icon: Trophy, end: false, adminOnly: true, designerOnly: false },
+  { to: "/personal-sales", label: "Personal Sales Figure", icon: Wallet, end: false, adminOnly: false, designerOnly: true },
+  { to: "/notice-board", label: "Notice Board", icon: Megaphone, end: false, adminOnly: false, designerOnly: false },
+  { to: "/showroom", label: "Showroom", icon: Store, end: false, adminOnly: false, designerOnly: false },
+  { to: "/files", label: "Files Archive", icon: Archive, end: false, adminOnly: false, designerOnly: false },
+  { to: "/users", label: "Users", icon: UsersIcon, end: false, adminOnly: true, designerOnly: false },
 ] as const;
 
 const ROLE_BADGE_VARIANT: Record<UserRole, "brand" | "ok" | "accent"> = {
@@ -52,7 +54,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     ? user.displayName.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()
     : "";
 
-  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin" || user?.role === "super_admin");
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => (!item.adminOnly || user?.role === "admin" || user?.role === "super_admin") && (!item.designerOnly || user?.role === "designer")
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-bg lg:flex-row">

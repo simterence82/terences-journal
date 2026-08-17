@@ -108,6 +108,13 @@ export interface Lead {
   contractAmount: number | null;
   // Whether GST applies to contractAmount. null = not yet indicated.
   gstApplicable: boolean | null;
+  // Whether this lead's contract value is credited solely to the assignee
+  // ("Solo") or split with other designers ("Sharing") -- null means not
+  // yet decided, which blocks saving further changes (see Leads.tsx).
+  // Only sharedWith entries carry an explicit percentage; the assignee's
+  // own cut is the remainder (100% minus the sum of sharedWith).
+  isShared: boolean | null;
+  sharedWith: LeadShare[];
   nextFollowUpDate: string | null;
   firstContactedAt: string | null;
   closedAt: string | null;
@@ -116,6 +123,19 @@ export interface Lead {
   createdAt: string;
   assignedAt: string | null;
 }
+
+// One other designer's cut of a shared lead's contract value -- see
+// Lead.sharedWith. "Percentage Of Project Profit" is the exact label the
+// studio uses for this figure.
+export interface LeadShare {
+  designerId: string;
+  designerName: string;
+  percentage: number;
+}
+
+// The fixed list of percentages a shared designer's cut can be set to --
+// 5% increments up to 100%.
+export const SHARE_PERCENTAGE_OPTIONS: number[] = Array.from({ length: 20 }, (_, i) => (i + 1) * 5);
 
 export const FOLLOW_UP_METHODS = ["Call", "WhatsApp", "Email", "Meeting", "Site Visit", "Other"] as const;
 export type FollowUpMethod = (typeof FOLLOW_UP_METHODS)[number];

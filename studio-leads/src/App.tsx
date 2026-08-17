@@ -5,6 +5,7 @@ import { DashboardPage } from "./pages/Dashboard";
 import { LeadsPage } from "./pages/Leads";
 import { AttendancePage } from "./pages/Attendance";
 import { KpiPage } from "./pages/Kpi";
+import { PersonalSalesFigurePage } from "./pages/PersonalSalesFigure";
 import { NoticeBoardPage } from "./pages/NoticeBoard";
 import { ShowroomPage } from "./pages/Showroom";
 import { FilesArchivePage } from "./pages/FilesArchive";
@@ -45,6 +46,14 @@ export const App: React.FC = () => (
       element={
         <ProtectedRoute roles={["super_admin", "admin"]}>
           <KpiPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/personal-sales"
+      element={
+        <ProtectedRoute roles={["designer"]}>
+          <PersonalSalesFigurePage />
         </ProtectedRoute>
       }
     />

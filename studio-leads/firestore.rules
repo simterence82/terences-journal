@@ -98,9 +98,14 @@ service cloud.firestore {
     // every approved user, and claimable by any of them -- a claim is a
     // narrow update that only sets assignedTo/assignedToName/assignedAt
     // (to their own uid), not a general edit.
+    //
+    // sharedWithIds is a flat mirror of sharedWith (see useLeads.ts) --
+    // any designer named there can also read the lead (their split counts
+    // toward their Personal Sales Figure), even though they don't own it.
+    // Removing them from a later edit revokes that visibility.
     match /leads/{id} {
-      allow get: if isAdmin() || isOwnDesigner(resource.data.assignedTo) || (isApproved() && resource.data.assignedTo == null);
-      allow list: if isAdmin() || isOwnDesigner(resource.data.assignedTo) || (isApproved() && resource.data.assignedTo == null);
+      allow get: if isAdmin() || isOwnDesigner(resource.data.assignedTo) || (isApproved() && resource.data.assignedTo == null) || (isApproved() && resource.data.get("sharedWithIds", []).hasAny([request.auth.uid]));
+      allow list: if isAdmin() || isOwnDesigner(resource.data.assignedTo) || (isApproved() && resource.data.assignedTo == null) || (isApproved() && resource.data.get("sharedWithIds", []).hasAny([request.auth.uid]));
       allow create: if isAdmin();
       allow update: if isAdmin() ||
         (isOwnDesigner(resource.data.assignedTo) &&
@@ -187,11 +192,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Sales targets (KPI & Grading's sidebar): one doc per designer per
-    // month. Admin-only in every direction -- designers don't see targets
-    // at all, matching the "for admin and super admin" product decision.
+    // Sales targets (KPI & Grading's sidebar, and its read-only mirror on a
+    // designer's own Personal Sales Figure page): one doc per designer per
+    // month. Either admin tier reads/writes every doc; a designer can only
+    // read their own (never another's, never write) -- see useSalesTargets.ts.
     match /salesTargets/{id} {
-      allow get, list: if isAdmin();
+      allow get: if isAdmin() || isOwnDesigner(resource.data.designerId);
+      allow list: if isAdmin() || isOwnDesigner(resource.data.designerId);
       allow create, update, delete: if isAdmin();
     }
   }

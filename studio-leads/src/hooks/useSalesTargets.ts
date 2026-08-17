@@ -1,11 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { collection, doc, getDocs, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, doc, getDocs, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
-import type { SalesTarget } from "../lib/types";
+import { isAdminRole, type SalesTarget, type Viewer } from "../lib/types";
 
 const COLLECTION = "salesTargets";
-const KEY = ["salesTargets"] as const;
 
 function toSalesTarget(id: string, data: Record<string, any>): SalesTarget {
   return {
@@ -20,13 +19,17 @@ function toSalesTarget(id: string, data: Record<string, any>): SalesTarget {
   };
 }
 
-/** Admin-only collection (see firestore.rules) -- no viewer scoping needed,
-    the KPI page that calls this is itself route-gated to admin/super admin. */
-export const useSalesTargetsList = () =>
+/** Either admin tier sees every designer's targets (the KPI page's Sales
+    Target panel); a designer only ever sees their own (their read-only
+    Personal Sales Figure page) -- see firestore.rules. */
+export const useSalesTargetsList = (viewer: Viewer | null) =>
   useQuery({
-    queryKey: KEY,
+    queryKey: ["salesTargets", viewer && isAdminRole(viewer.role) ? "all" : viewer?.id],
+    enabled: !!viewer,
     queryFn: async () => {
-      const snap = await getDocs(collection(db, COLLECTION));
+      const snap = isAdminRole(viewer!.role)
+        ? await getDocs(collection(db, COLLECTION))
+        : await getDocs(query(collection(db, COLLECTION), where("designerId", "==", viewer!.id)));
       return snap.docs.map((d) => toSalesTarget(d.id, d.data()));
     },
   });
@@ -56,6 +59,6 @@ export const useSetSalesTarget = () => {
         updatedAt: serverTimestamp(),
       });
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["salesTargets"] }),
   });
 };

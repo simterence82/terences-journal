@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, PackageX, Plus, Sparkles, Trash2, Wrench, Pencil, LayoutGrid } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, PackageX, Plus, Sparkles, Trash2, Wrench, Pencil, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import {
   useShowroomItemsList,
   useCreateShowroomItem,
   useUpdateShowroomItem,
   useDeleteShowroomItem,
+  useDeleteShowroomItems,
 } from "../hooks/useShowroom";
 import { useAuth } from "../lib/AuthContext";
 import {
@@ -45,6 +46,11 @@ const STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | 
   servicing_scheduled: "accent",
   resolved: "outline",
 };
+
+// "Resolved" is reached via the dedicated Resolved checkbox on each item
+// now, never picked from a status dropdown -- these lists back every
+// Select that offers a manual status choice (add, edit, quick-change).
+const SELECTABLE_STATUSES = SHOWROOM_STATUSES.filter((s) => s !== "resolved");
 
 const EMPTY_FORM = {
   category: SHOWROOM_CATEGORIES[0] as ShowroomCategory,
@@ -187,6 +193,7 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
   const createMutation = useCreateShowroomItem();
   const updateMutation = useUpdateShowroomItem();
   const deleteMutation = useDeleteShowroomItem();
+  const deleteManyMutation = useDeleteShowroomItems();
   const deleteTarget = useConfirmDialog<ShowroomItem>();
 
   const [tab, setTab] = useState<AdminTab>("overview");
@@ -195,6 +202,15 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<ShowroomItem | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  // Admin-only multi-select for bulk-deleting resolved items -- cleared
+  // whenever the visible set changes so a stale selection can't carry over
+  // to items the admin never actually picked.
+  const [selectedResolvedIds, setSelectedResolvedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    setSelectedResolvedIds(new Set());
+  }, [tab, statusFilter]);
 
   const handleTabChange = (v: string) => {
     setTab(v as AdminTab);
@@ -328,6 +344,18 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
     });
   };
 
+  const handleBulkDelete = async () => {
+    const ids = [...selectedResolvedIds];
+    await deleteManyMutation.mutateAsync(ids, {
+      onSuccess: () => {
+        toast.success(`Deleted ${ids.length} item${ids.length === 1 ? "" : "s"}`);
+        setSelectedResolvedIds(new Set());
+        setBulkDeleteConfirmOpen(false);
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete items"),
+    });
+  };
+
   const activeCategory = tab === "overview" ? null : tab;
   const categoryItems = activeCategory ? items.filter((i) => i.category === activeCategory) : [];
   const visibleCategoryItems = categoryItems.filter((i) => statusGroup(i.status) === statusFilter);
@@ -443,6 +471,22 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
             }))}
           />
 
+          {isAdmin && statusFilter === "resolved" && visibleCategoryItems.length > 0 && (
+            <div className="flex items-center justify-between rounded-xl border border-line bg-surface px-4 py-2.5">
+              <Checkbox
+                checked={selectedResolvedIds.size > 0 && selectedResolvedIds.size === visibleCategoryItems.length}
+                onChange={(checked) => setSelectedResolvedIds(checked ? new Set(visibleCategoryItems.map((i) => i.id)) : new Set())}
+              >
+                <span className="text-[0.8125rem] font-medium text-ink">
+                  {selectedResolvedIds.size > 0 ? `${selectedResolvedIds.size} selected` : "Select all"}
+                </span>
+              </Checkbox>
+              <Button variant="danger" size="sm" disabled={selectedResolvedIds.size === 0} onClick={() => setBulkDeleteConfirmOpen(true)}>
+                <Trash2 size={14} /> Delete Selected
+              </Button>
+            </div>
+          )}
+
           {isLoading ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
@@ -453,55 +497,74 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
             <EmptyState icon={<LayoutGrid size={28} />} message={`Nothing in ${STATUS_GROUP_LABELS[statusFilter].toLowerCase()} for ${SHOWROOM_CATEGORY_LABELS[activeCategory!]} yet.`} />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {visibleCategoryItems.map((item) => (
-                <div key={item.id} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5 shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="text-[0.9375rem] font-semibold text-ink">{item.title}</span>
-                    {isAdmin && (
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit item">
-                          <Pencil size={16} />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(item)} aria-label="Delete item">
-                          <Trash2 size={16} />
-                        </Button>
+              {visibleCategoryItems.map((item) => {
+                const resolved = statusGroup(item.status) === "resolved";
+                return (
+                  <div key={item.id} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {isAdmin && resolved && (
+                          <Checkbox
+                            checked={selectedResolvedIds.has(item.id)}
+                            onChange={(checked) =>
+                              setSelectedResolvedIds((prev) => {
+                                const next = new Set(prev);
+                                checked ? next.add(item.id) : next.delete(item.id);
+                                return next;
+                              })
+                            }
+                          />
+                        )}
+                        <span className="text-[0.9375rem] font-semibold text-ink">{item.title}</span>
+                      </div>
+                      {isAdmin && (
+                        <div className="flex shrink-0 items-center gap-1">
+                          {!resolved && (
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit item">
+                              <Pencil size={16} />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(item)} aria-label="Delete item">
+                            <Trash2 size={16} />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    {item.description && <p className="text-[0.8125rem] leading-relaxed text-faint-ink">{item.description}</p>}
+                    {item.areas.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {item.areas.map((a) => (
+                          <Badge key={a} variant="outline">
+                            {a}
+                          </Badge>
+                        ))}
                       </div>
                     )}
-                  </div>
-                  {item.description && <p className="text-[0.8125rem] leading-relaxed text-faint-ink">{item.description}</p>}
-                  {item.areas.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {item.areas.map((a) => (
-                        <Badge key={a} variant="outline">
-                          {a}
-                        </Badge>
-                      ))}
+                    {isAdmin && !resolved && (
+                      <Select
+                        value={item.status}
+                        onValueChange={(v) => quickSetStatus(item, v as ShowroomStatus)}
+                        options={SELECTABLE_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
+                      />
+                    )}
+                    <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-faint-ink">
+                      <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
+                      <span>
+                        {item.reportedByName ?? "Studio"} · {formatDate(item.createdAt)}
+                      </span>
                     </div>
-                  )}
-                  {isAdmin && (
-                    <Select
-                      value={item.status}
-                      onValueChange={(v) => quickSetStatus(item, v as ShowroomStatus)}
-                      options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
-                    />
-                  )}
-                  <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-faint-ink">
-                    <Badge variant={STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
-                    <span>
-                      {item.reportedByName ?? "Studio"} · {formatDate(item.createdAt)}
-                    </span>
+                    {item.scheduledAt && (
+                      <p className="rounded-lg bg-[var(--accent-wash)] px-3 py-2 text-xs font-medium text-accent">Scheduled: {formatScheduled(item.scheduledAt)}</p>
+                    )}
+                    {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
+                    {!resolved && (
+                      <Checkbox checked={false} onChange={(checked) => checked && handleResolve(item)}>
+                        <span className="text-sm text-ink">Resolved</span>
+                      </Checkbox>
+                    )}
                   </div>
-                  {item.scheduledAt && (
-                    <p className="rounded-lg bg-[var(--accent-wash)] px-3 py-2 text-xs font-medium text-accent">Scheduled: {formatScheduled(item.scheduledAt)}</p>
-                  )}
-                  {item.notes && <p className="rounded-lg bg-surface px-3 py-2 text-xs text-faint-ink">{item.notes}</p>}
-                  {!isAdmin && statusGroup(item.status) !== "resolved" && (
-                    <Button variant="soft" size="sm" onClick={() => handleResolve(item)} disabled={updateMutation.isPending}>
-                      <CheckCircle2 size={14} /> Mark Resolved
-                    </Button>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -535,7 +598,7 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
               <Select
                 value={form.status}
                 onValueChange={(v) => setForm((p) => ({ ...p, status: v as ShowroomStatus }))}
-                options={(form.category === "aircon_servicing" ? AIRCON_ADD_STATUSES : SHOWROOM_STATUSES).map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
+                options={(form.category === "aircon_servicing" ? AIRCON_ADD_STATUSES : SELECTABLE_STATUSES).map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))}
               />
             </div>
           </div>
@@ -567,7 +630,7 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
             </div>
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-ink">Status *</label>
-              <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SHOWROOM_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
+              <Select value={editForm.status} onValueChange={(v) => setEditForm((p) => ({ ...p, status: v as ShowroomStatus }))} options={SELECTABLE_STATUSES.map((s) => ({ value: s, label: SHOWROOM_STATUS_LABELS[s] }))} />
             </div>
           </div>
           {isAircon(editForm.category) && <AreaChecklist value={editForm.areas} onChange={(areas) => setEditForm((p) => ({ ...p, areas }))} />}
@@ -592,6 +655,14 @@ const ShowroomView: React.FC<{ items: ShowroomItem[]; isLoading: boolean; isAdmi
         title="Remove this item?"
         description={`"${deleteTarget.target?.title ?? ""}" will be removed from the showroom tracker.`}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={bulkDeleteConfirmOpen}
+        onOpenChange={setBulkDeleteConfirmOpen}
+        title={`Delete ${selectedResolvedIds.size} item${selectedResolvedIds.size === 1 ? "" : "s"}?`}
+        description="These resolved items will be permanently removed from the showroom tracker. This can't be undone."
+        onConfirm={handleBulkDelete}
       />
     </div>
   );
