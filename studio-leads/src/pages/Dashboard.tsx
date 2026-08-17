@@ -1,14 +1,23 @@
 import React, { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, CalendarCheck, CalendarClock, Check, Handshake, Megaphone, TrendingUp, X as XIcon } from "lucide-react";
+import { AlertTriangle, CalendarCheck, CalendarClock, Check, Handshake, Megaphone, Store, TrendingUp, X as XIcon } from "lucide-react";
 import { useLeadsList } from "../hooks/useLeads";
 import { useAnnouncementsList } from "../hooks/useAnnouncements";
 import { useAttendanceList, useLeaveCalendarList, useSetLeaveApproval } from "../hooks/useAttendance";
 import { useShowroomItemsList } from "../hooks/useShowroom";
 import { useAuth } from "../lib/AuthContext";
 import { todayDateString } from "../lib/firestoreUtil";
-import { ATTENDANCE_REASON_LABELS, CLOSED_LEAD_STATUSES, SHOWROOM_STATUS_LABELS, isAdminRole, type AttendanceRecord } from "../lib/types";
+import {
+  ATTENDANCE_REASON_LABELS,
+  CLOSED_LEAD_STATUSES,
+  OPEN_SHOWROOM_STATUSES,
+  SHOWROOM_CATEGORY_LABELS,
+  SHOWROOM_STATUS_LABELS,
+  isAdminRole,
+  type AttendanceRecord,
+  type ShowroomStatus,
+} from "../lib/types";
 import { SummaryCard } from "../components/SummaryCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { Badge } from "../components/Badge";
@@ -17,6 +26,16 @@ import { EmptyState } from "../components/EmptyState";
 import { Skeleton } from "../components/Skeleton";
 import { LeaveCalendar } from "../components/LeaveCalendar";
 import { EventCalendar } from "../components/EventCalendar";
+
+const SHOWROOM_STATUS_VARIANT: Record<ShowroomStatus, "ok" | "warn" | "bad" | "accent" | "outline"> = {
+  ok: "ok",
+  low_stock: "warn",
+  needs_attention: "warn",
+  faulty: "bad",
+  servicing_needed: "warn",
+  servicing_scheduled: "accent",
+  resolved: "outline",
+};
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -97,6 +116,18 @@ export const DashboardPage: React.FC = () => {
     [overdue, dueToday]
   );
 
+  // Admin/super admin only -- open Showroom items (low stock, faulty,
+  // needs attention, servicing needed/scheduled) surfaced here too, so
+  // they don't have to visit Showroom separately to notice them.
+  const openShowroomItems = useMemo(
+    () =>
+      showroomItems
+        .filter((i) => OPEN_SHOWROOM_STATUSES.includes(i.status))
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+        .slice(0, 8),
+    [showroomItems]
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -168,6 +199,53 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {isAdmin && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="font-display text-lg font-semibold text-ink">Showroom Needs Attention</h2>
+              {openShowroomItems.length > 0 && <Badge variant="warn">{openShowroomItems.length}</Badge>}
+            </div>
+            <Link to="/showroom" className="text-[0.8125rem] text-brand hover:underline">
+              Go to Showroom
+            </Link>
+          </div>
+          {showroomQuery.isLoading ? (
+            <Skeleton style={{ height: 120 }} />
+          ) : openShowroomItems.length === 0 ? (
+            <EmptyState icon={<Store size={24} />} message="Nothing open right now. Showroom's all clear." className="py-6" />
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-line bg-panel shadow-sm">
+              <table className="w-full text-[0.8125rem]">
+                <thead className="bg-surface">
+                  <tr>
+                    {["Item", "Category", "Status", "Reported"].map((h) => (
+                      <th key={h} className="border-b border-line px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-faint-ink">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {openShowroomItems.map((item) => (
+                    <tr key={item.id} className="cursor-pointer hover:bg-surface" onClick={() => navigate("/showroom")}>
+                      <td className="border-b border-line px-4 py-3 font-medium text-ink">{item.title}</td>
+                      <td className="border-b border-line px-4 py-3 text-faint-ink">{SHOWROOM_CATEGORY_LABELS[item.category]}</td>
+                      <td className="border-b border-line px-4 py-3">
+                        <Badge variant={SHOWROOM_STATUS_VARIANT[item.status]}>{SHOWROOM_STATUS_LABELS[item.status]}</Badge>
+                      </td>
+                      <td className="border-b border-line px-4 py-3 text-faint-ink">
+                        {new Date(item.createdAt).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {isAdmin && (
         <div className="flex flex-col gap-3">
