@@ -123,14 +123,18 @@ export const useDeleteTask = () =>
     },
   });
 
-export async function downloadTaskFile(id: string, fileName: string, fileType: string | null): Promise<void> {
+export async function fetchTaskFileBlob(id: string, fileType: string | null): Promise<Blob> {
   const snap = await getDoc(doc(db, FILES_COLLECTION, id));
-  if (!snap.exists()) return;
+  if (!snap.exists()) throw new Error("File not found");
   const { fileData } = snap.data() as { fileData: string };
   const binary = atob(fileData);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  const blob = new Blob([bytes], { type: fileType ?? "application/octet-stream" });
+  return new Blob([bytes], { type: fileType ?? "application/octet-stream" });
+}
+
+export async function downloadTaskFile(id: string, fileName: string, fileType: string | null): Promise<void> {
+  const blob = await fetchTaskFileBlob(id, fileType);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

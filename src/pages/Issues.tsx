@@ -193,16 +193,16 @@ export const IssuesPage: React.FC = () => {
                     <Download size={14} /> {issue.fileName}
                   </button>
                 ) : <span />}
-                {isAdmin && (
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(issue)} aria-label="Edit issue">
-                      <Pencil size={16} />
-                    </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(issue)} aria-label="Edit issue">
+                    <Pencil size={16} />
+                  </Button>
+                  {isAdmin && (
                     <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(issue.id)} aria-label="Delete issue">
                       <Trash2 size={16} />
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           ))}

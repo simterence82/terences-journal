@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Pencil, Paperclip, Download, ListChecks } from "lucide-react";
+import { Plus, Trash2, Pencil, Paperclip, ListChecks } from "lucide-react";
 import { toast } from "sonner";
-import { useTasksList, useCreateTask, useUpdateTask, useDeleteTask, downloadTaskFile } from "../hooks/useTasks";
+import { useTasksList, useCreateTask, useUpdateTask, useDeleteTask, fetchTaskFileBlob } from "../hooks/useTasks";
 import { EmptyState } from "../components/EmptyState";
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
@@ -16,6 +16,7 @@ import { Select } from "../components/Select";
 import { Tabs } from "../components/Tabs";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
+import { FilePreviewDialog } from "../components/FilePreviewDialog";
 import { Skeleton } from "../components/Skeleton";
 import type { Task, TaskPriority } from "../lib/types";
 
@@ -43,6 +44,7 @@ export const TasksPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [previewTask, setPreviewTask] = useState<Task | null>(null);
 
   const tasks = listQuery.data ?? [];
   const openTasks = tasks.filter((t) => !t.done);
@@ -236,20 +238,20 @@ export const TasksPage: React.FC = () => {
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
                 {task.fileName ? (
-                  <button type="button" onClick={() => void downloadTaskFile(task.id, task.fileName!, task.fileType)} className="flex items-center gap-1 text-xs text-primary hover:underline">
-                    <Download size={14} /> {task.fileName}
+                  <button type="button" onClick={() => setPreviewTask(task)} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    <Paperclip size={14} /> {task.fileName}
                   </button>
                 ) : <span />}
-                {isAdmin && (
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(task)} aria-label="Edit task">
-                      <Pencil size={16} />
-                    </Button>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(task)} aria-label="Edit task">
+                    <Pencil size={16} />
+                  </Button>
+                  {isAdmin && (
                     <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(task.id)} aria-label="Delete task">
                       <Trash2 size={16} />
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -263,6 +265,17 @@ export const TasksPage: React.FC = () => {
         description="This will move the task to the Trash Bin, where it can be restored within 120 days before being permanently removed."
         onConfirm={handleDelete}
       />
+
+      {previewTask && (
+        <FilePreviewDialog
+          open={previewTask !== null}
+          onOpenChange={(open) => !open && setPreviewTask(null)}
+          fileId={previewTask.id}
+          fileName={previewTask.fileName!}
+          fileType={previewTask.fileType}
+          fetchBlob={fetchTaskFileBlob}
+        />
+      )}
     </div>
   );
 };

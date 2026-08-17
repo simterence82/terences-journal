@@ -19,12 +19,16 @@ import { useIssuesList } from "../hooks/useIssues";
 import { useLightingList } from "../hooks/useLighting";
 import { useBlumList } from "../hooks/useBlum";
 import { useScheduleList } from "../hooks/useSchedule";
+import { useAuth } from "../lib/AuthContext";
 import { getChineseLunarDateLabel } from "../lib/lunarCalendar";
 import { formatSGD } from "../lib/formatCurrency";
 import { SAMPLE_WEATHER, SAMPLE_HEADLINES } from "../lib/sampleWeatherNews";
 import { SummaryCard } from "../components/SummaryCard";
 import { PriorityBadge } from "../components/PriorityBadge";
 import { Skeleton } from "../components/Skeleton";
+import type { TaskPriority } from "../lib/types";
+
+const PRIORITY_ORDER: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
 
 const CONDITION_ICON: Record<string, React.ReactNode> = {
   Sunny: <Sun size={20} />,
@@ -39,6 +43,9 @@ function todayISODate(): string {
 }
 
 export const DashboardPage: React.FC = () => {
+  const { authState } = useAuth();
+  const isAdmin = authState.type === "authenticated" && authState.user.role === "admin";
+
   const tasksQuery = useTasksList();
   const issuesQuery = useIssuesList();
   const lightingQuery = useLightingList();
@@ -67,6 +74,8 @@ export const DashboardPage: React.FC = () => {
 
   const topTasks = [...openTasks]
     .sort((a, b) => {
+      const priorityCmp = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+      if (priorityCmp !== 0) return priorityCmp;
       if (!a.dueDate && !b.dueDate) return 0;
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
@@ -132,28 +141,34 @@ export const DashboardPage: React.FC = () => {
         )}
       </section>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard
-          label="Open Tasks"
-          value={tasksQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : openTasks.length}
-          sublabel={`${(tasksQuery.data ?? []).length} total`}
-          icon={<ListChecks size={18} />}
-          tone="primary"
-        />
-        <SummaryCard
-          label="Unresolved Issues"
-          value={issuesQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : unresolvedIssues.length}
-          sublabel={`${(issuesQuery.data ?? []).length} total`}
-          icon={<AlertTriangle size={18} />}
-          tone="destructive"
-        />
-        <SummaryCard
-          label="Lighting Profit"
-          value={lightingQuery.isLoading ? <Skeleton style={{ width: 80, height: 32 }} /> : formatSGD(totalLightingProfit)}
-          sublabel={`${(lightingQuery.data ?? []).length} entries`}
-          icon={<Lightbulb size={18} />}
-          tone="warning"
-        />
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+        <Link to="/tasks" className="block">
+          <SummaryCard
+            label="Open Tasks"
+            value={tasksQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : openTasks.length}
+            sublabel={`${(tasksQuery.data ?? []).length} total`}
+            icon={<ListChecks size={18} />}
+            tone="primary"
+          />
+        </Link>
+        <Link to="/issues" className="block">
+          <SummaryCard
+            label="Unresolved Issues"
+            value={issuesQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : unresolvedIssues.length}
+            sublabel={`${(issuesQuery.data ?? []).length} total`}
+            icon={<AlertTriangle size={18} />}
+            tone="destructive"
+          />
+        </Link>
+        {isAdmin && (
+          <SummaryCard
+            label="Lighting Profit"
+            value={lightingQuery.isLoading ? <Skeleton style={{ width: 80, height: 32 }} /> : formatSGD(totalLightingProfit)}
+            sublabel={`${(lightingQuery.data ?? []).length} entries`}
+            icon={<Lightbulb size={18} />}
+            tone="warning"
+          />
+        )}
         <SummaryCard
           label="Blum Total"
           value={blumQuery.isLoading ? <Skeleton style={{ width: 80, height: 32 }} /> : formatSGD(totalBlumAmount)}
@@ -165,7 +180,12 @@ export const DashboardPage: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_1fr]">
         <section className="rounded-lg border border-border bg-card p-6 shadow">
-          <h2 className="mb-4 font-display text-[1.0625rem] font-semibold text-foreground">Daily Task Summary</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-[1.0625rem] font-semibold text-foreground">Daily Task Summary</h2>
+            <Link to="/tasks" className="text-sm font-medium text-primary hover:underline">
+              View all &rarr;
+            </Link>
+          </div>
           {tasksQuery.isLoading ? (
             <div className="flex flex-col gap-2">
               {[1, 2, 3].map((i) => (
@@ -177,16 +197,21 @@ export const DashboardPage: React.FC = () => {
           ) : (
             <ul className="flex flex-col gap-2">
               {topTasks.map((task) => (
-                <li key={task.id} className="flex items-center justify-between gap-3 rounded border border-border bg-surface p-3">
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-sm font-medium text-foreground">{task.title}</span>
-                    {task.dueDate && (
-                      <span className="text-xs text-muted-foreground">
-                        Due {new Date(task.dueDate).toLocaleDateString("en-SG", { day: "numeric", month: "short" })}
-                      </span>
-                    )}
-                  </div>
-                  <PriorityBadge priority={task.priority} />
+                <li key={task.id}>
+                  <Link
+                    to="/tasks"
+                    className="flex items-center justify-between gap-3 rounded border border-border bg-surface p-3 transition-colors hover:bg-muted"
+                  >
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-sm font-medium text-foreground">{task.title}</span>
+                      {task.dueDate && (
+                        <span className="text-xs text-muted-foreground">
+                          Due {new Date(task.dueDate).toLocaleDateString("en-SG", { day: "numeric", month: "short" })}
+                        </span>
+                      )}
+                    </div>
+                    <PriorityBadge priority={task.priority} />
+                  </Link>
                 </li>
               ))}
             </ul>

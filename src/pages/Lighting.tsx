@@ -286,18 +286,18 @@ export const LightingPage: React.FC = () => {
                   <td className="border-b border-border px-4 py-3 text-center">
                     <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
                   </td>
-                  {isAdmin && (
-                    <td className="border-b border-border px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
-                          <Pencil size={16} />
-                        </Button>
+                  <td className="border-b border-border px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
+                        <Pencil size={16} />
+                      </Button>
+                      {isAdmin && (
                         <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
                           <Trash2 size={16} />
                         </Button>
-                      </div>
-                    </td>
-                  )}
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
