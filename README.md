@@ -35,10 +35,15 @@ Actions handling the build/deploy and a small daily maintenance job.
   delete actions require confirmation first.
 - **User Management** (admin only) — anyone can request access (self
   sign-up); an admin approves each request and assigns admin/member, or
-  denies it. Approved users can be removed (revokes access) at any time.
+  denies it. Removing a user revokes access immediately, and their login is
+  fully deleted within a few minutes (via a scheduled GitHub Actions job —
+  see below) so the same email can be used to sign up again.
 - **Autocomplete / dropdown memory** — brand, client name, address,
   commission recipient, Blum order name, and task assignee fields remember
   previously entered values.
+- **Live updates** — every table is backed by a real-time Firestore
+  listener, so when one person adds, edits, or deletes something, everyone
+  else's screen updates immediately — no refresh needed.
 
 ## Tech stack
 
@@ -47,9 +52,10 @@ Actions handling the build/deploy and a small daily maintenance job.
 | Frontend | React 18 + Vite, TypeScript, Tailwind CSS |
 | Data & auth | Firebase Authentication + Cloud Firestore, called directly from the browser (`firebase` client SDK) |
 | File uploads | Base64 text stored on the Firestore document — no Cloud Storage, no billing plan needed |
-| Data fetching | TanStack React Query |
+| Data fetching | Real-time Firestore listeners (`onSnapshot`) for every list view, TanStack React Query for mutations |
 | Hosting | GitHub Pages, built and deployed by GitHub Actions |
 | Trash auto-purge | A small script (`scripts/purgeExpiredTrash.ts`, Firebase Admin SDK) run on a daily GitHub Actions schedule |
+| Deleted-user cleanup | A small script (`scripts/cleanupDeletedUsers.ts`, Firebase Admin SDK) run on a GitHub Actions schedule every 10 minutes |
 
 ## Where your data lives
 
@@ -119,7 +125,8 @@ login is an Admin-SDK-only operation this static app can't perform.
 5. **Project settings → Service accounts** tab → **Generate new private
    key** → save the downloaded file as `firebase-service-account.json` at
    the repo root (already gitignored — never commit this file). This is
-   **only** used by the local/CI trash-purge script, not by the app itself.
+   **only** used by the local/CI trash-purge and deleted-user-cleanup
+   scripts, not by the app itself.
 
 This deliberately skips Cloud Storage — it now requires upgrading the
 project to a paid "Blaze" plan (a card on file, even though usage would
@@ -160,8 +167,8 @@ required.
      the build).
    - Under **Secrets**, add `FIREBASE_SERVICE_ACCOUNT` — the full contents
      of `firebase-service-account.json` from step 1.5 (this one **is**
-     sensitive — it's only used by the scheduled purge workflow, never
-     shipped to the browser).
+     sensitive — it's only used by the scheduled purge and deleted-user-
+     cleanup workflows, never shipped to the browser).
 3. Push to `master` (which `.github/workflows/deploy.yml` watches) — this
    builds the app and publishes `dist/` to Pages automatically. You'll get
    a URL like `https://<your-github-username>.github.io/terences-journal/`.
@@ -182,6 +189,18 @@ secret set up in the deploy section above. You can also trigger it manually
 from the repo's **Actions** tab (`workflow_dispatch`), or run it locally
 with `npm run purge` (needs `firebase-service-account.json` present, as
 described in step 1.5).
+
+## Deleted-user cleanup
+
+The browser can only delete its own signed-in Firebase Auth account, not
+someone else's — so when an admin removes a user in the Users page, the app
+revokes their app access immediately and queues a `pendingAuthDeletions`
+doc. `.github/workflows/cleanup-deleted-users.yml` runs
+`scripts/cleanupDeletedUsers.ts` every 10 minutes, using the same
+`FIREBASE_SERVICE_ACCOUNT` secret, to actually delete the Firebase Auth
+account. Once that runs, the email address is free for someone else (or the
+same person) to sign up with again. You can also trigger it manually from
+the repo's **Actions** tab, or run it locally with `npm run cleanup-users`.
 
 ## Roles
 

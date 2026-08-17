@@ -45,10 +45,13 @@ export const UsersPage: React.FC = () => {
 
   const handleDelete = async () => {
     if (!deleteTarget.target) return;
-    await deleteMutation.mutateAsync(deleteTarget.target.id, {
-      onSuccess: () => toast.success("User deleted"),
-      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete user"),
-    });
+    await deleteMutation.mutateAsync(
+      { id: deleteTarget.target.id, email: deleteTarget.target.email },
+      {
+        onSuccess: () => toast.success("User deleted"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete user"),
+      }
+    );
   };
 
   return (
@@ -165,7 +168,7 @@ export const UsersPage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this user?"
-        description={`"${deleteTarget.target?.displayName ?? ""}" will lose access immediately. This only removes their app access — their underlying login still exists and cannot be fully deleted from here, but they'll be stuck on the "awaiting approval" screen with no way back in unless re-added.`}
+        description={`"${deleteTarget.target?.displayName ?? ""}" will lose access immediately. Their login is fully removed within a few minutes, so the same email address can be used to sign up again if needed.`}
         onConfirm={handleDelete}
       />
 

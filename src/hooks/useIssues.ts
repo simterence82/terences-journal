@@ -1,10 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
   collection,
   doc,
   getDoc,
-  getDocs,
   query,
   serverTimestamp,
   setDoc,
@@ -13,9 +12,9 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
+import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { Issue } from "../lib/types";
 
-const KEY = ["issues"] as const;
 const COLLECTION = "issues";
 const FILES_COLLECTION = "issueFiles";
 
@@ -49,18 +48,14 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export const useIssuesList = () =>
-  useQuery({
-    queryKey: KEY,
-    queryFn: async () => {
-      const snap = await getDocs(query(collection(db, COLLECTION), where("isDeleted", "==", false)));
-      const items = snap.docs.map((d) => toIssue(d.id, d.data()));
-      items.sort((a, b) => {
-        if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
-        return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
-      });
-      return items;
-    },
-  });
+  useCollectionQuery(
+    () => query(collection(db, COLLECTION), where("isDeleted", "==", false)),
+    toIssue,
+    (a, b) => {
+      if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
+      return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+    }
+  );
 
 export interface IssueCreateInput {
   title: string;
@@ -68,9 +63,8 @@ export interface IssueCreateInput {
   file?: File | null;
 }
 
-export const useCreateIssue = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useCreateIssue = () =>
+  useMutation({
     mutationFn: async (input: IssueCreateInput) => {
       if (input.file && !ALLOWED_ISSUE_FILE_TYPES.includes(input.file.type)) {
         throw new Error("Only PDF, JPEG, or PNG attachments are allowed");
@@ -93,9 +87,7 @@ export const useCreateIssue = () => {
       const snap = await getDoc(ref);
       return toIssue(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
 export interface IssueUpdateInput {
   id: string;
@@ -104,29 +96,23 @@ export interface IssueUpdateInput {
   resolved?: boolean;
 }
 
-export const useUpdateIssue = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useUpdateIssue = () =>
+  useMutation({
     mutationFn: async ({ id, ...updates }: IssueUpdateInput) => {
       const ref = doc(db, COLLECTION, id);
       await updateDoc(ref, updates);
       const snap = await getDoc(ref);
       return toIssue(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useDeleteIssue = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useDeleteIssue = () =>
+  useMutation({
     mutationFn: async (id: string) => {
       await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
       return { success: true as const };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
 export async function downloadIssueFile(id: string, fileName: string, fileType: string | null): Promise<void> {
   const snap = await getDoc(doc(db, FILES_COLLECTION, id));

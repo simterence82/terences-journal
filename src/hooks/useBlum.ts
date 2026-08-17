@@ -1,10 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
   collection,
   doc,
   getDoc,
-  getDocs,
   query,
   serverTimestamp,
   updateDoc,
@@ -12,9 +11,9 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
+import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { BlumPurchase } from "../lib/types";
 
-const KEY = ["blum"] as const;
 const COLLECTION = "blumPurchases";
 
 function toBlumPurchase(id: string, data: Record<string, any>): BlumPurchase {
@@ -33,15 +32,11 @@ function toBlumPurchase(id: string, data: Record<string, any>): BlumPurchase {
 }
 
 export const useBlumList = () =>
-  useQuery({
-    queryKey: KEY,
-    queryFn: async () => {
-      const snap = await getDocs(query(collection(db, COLLECTION), where("isDeleted", "==", false)));
-      const items = snap.docs.map((d) => toBlumPurchase(d.id, d.data()));
-      items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-      return items;
-    },
-  });
+  useCollectionQuery(
+    () => query(collection(db, COLLECTION), where("isDeleted", "==", false)),
+    toBlumPurchase,
+    (a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0)
+  );
 
 export interface BlumCreateInput {
   orderName: string;
@@ -50,9 +45,8 @@ export interface BlumCreateInput {
   notes: string | null;
 }
 
-export const useCreateBlum = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useCreateBlum = () =>
+  useMutation({
     mutationFn: async (input: BlumCreateInput) => {
       const ref = await addDoc(collection(db, COLLECTION), {
         ...input,
@@ -66,13 +60,10 @@ export const useCreateBlum = () => {
       const snap = await getDoc(ref);
       return toBlumPurchase(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useUpdateBlum = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useUpdateBlum = () =>
+  useMutation({
     mutationFn: async ({
       id,
       ...updates
@@ -82,17 +73,12 @@ export const useUpdateBlum = () => {
       const snap = await getDoc(ref);
       return toBlumPurchase(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useDeleteBlum = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useDeleteBlum = () =>
+  useMutation({
     mutationFn: async (id: string) => {
       await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
       return { success: true as const };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};

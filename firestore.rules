@@ -58,6 +58,18 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // Marks a Firebase Auth account for deletion after an admin removes a
+    // users/{uid} doc. The client can never delete another user's Auth
+    // account directly (no Admin SDK in the browser); it just queues this
+    // doc, which a scheduled GitHub Actions job (Admin SDK) processes and
+    // deletes -- freeing the email for someone else to sign up with.
+    match /pendingAuthDeletions/{userId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+      allow update: if false;
+    }
+
     // Shared shape for the five domain collections: any approved user
     // (admin or member) can read/create/edit records, matching the old
     // requireAuth-only routes. Only admins may touch isDeleted/deletedAt

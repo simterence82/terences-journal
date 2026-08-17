@@ -1,10 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
   collection,
   doc,
   getDoc,
-  getDocs,
   query,
   serverTimestamp,
   updateDoc,
@@ -12,9 +11,9 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
+import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { LightingPurchase } from "../lib/types";
 
-const KEY = ["lighting"] as const;
 const COLLECTION = "lightingPurchases";
 
 function toLightingPurchase(id: string, data: Record<string, any>): LightingPurchase {
@@ -37,15 +36,11 @@ function toLightingPurchase(id: string, data: Record<string, any>): LightingPurc
 }
 
 export const useLightingList = () =>
-  useQuery({
-    queryKey: KEY,
-    queryFn: async () => {
-      const snap = await getDocs(query(collection(db, COLLECTION), where("isDeleted", "==", false)));
-      const items = snap.docs.map((d) => toLightingPurchase(d.id, d.data()));
-      items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-      return items;
-    },
-  });
+  useCollectionQuery(
+    () => query(collection(db, COLLECTION), where("isDeleted", "==", false)),
+    toLightingPurchase,
+    (a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0)
+  );
 
 export interface LightingCreateInput {
   brand: string;
@@ -59,9 +54,8 @@ export interface LightingCreateInput {
   notes: string | null;
 }
 
-export const useCreateLighting = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useCreateLighting = () =>
+  useMutation({
     mutationFn: async (input: LightingCreateInput) => {
       const ref = await addDoc(collection(db, COLLECTION), {
         ...input,
@@ -74,13 +68,10 @@ export const useCreateLighting = () => {
       const snap = await getDoc(ref);
       return toLightingPurchase(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useUpdateLighting = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useUpdateLighting = () =>
+  useMutation({
     mutationFn: async ({
       id,
       ...updates
@@ -90,17 +81,12 @@ export const useUpdateLighting = () => {
       const snap = await getDoc(ref);
       return toLightingPurchase(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useDeleteLighting = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useDeleteLighting = () =>
+  useMutation({
     mutationFn: async (id: string) => {
       await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
       return { success: true as const };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};

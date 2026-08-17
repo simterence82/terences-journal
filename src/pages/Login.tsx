@@ -10,6 +10,27 @@ import { Button } from "../components/Button";
 
 type Mode = "login" | "signup";
 
+function formatAuthError(err: unknown): string {
+  const code = err && typeof err === "object" && "code" in err ? (err as { code: string }).code : null;
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "This email is already registered. If that account was recently removed by an admin, its login is cleared out automatically within a few minutes — please try again shortly.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/weak-password":
+      return "Password must be at least 8 characters.";
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+      return "Incorrect email or password.";
+    case "auth/user-not-found":
+      return "No account found with that email.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Please wait a moment and try again.";
+    default:
+      return err instanceof Error ? err.message : "Something went wrong";
+  }
+}
+
 export const LoginPage: React.FC = () => {
   const { authState, refreshUser } = useAuth();
   const navigate = useNavigate();
@@ -71,7 +92,7 @@ export const LoginPage: React.FC = () => {
       await refreshUser();
       navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(formatAuthError(err));
     } finally {
       setIsLoading(false);
     }

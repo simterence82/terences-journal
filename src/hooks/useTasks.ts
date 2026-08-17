@@ -1,10 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
   collection,
   doc,
   getDoc,
-  getDocs,
   query,
   serverTimestamp,
   setDoc,
@@ -13,9 +12,9 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { compareNullableAsc, toIso } from "../lib/firestoreUtil";
+import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { Task, TaskPriority } from "../lib/types";
 
-const KEY = ["tasks"] as const;
 const COLLECTION = "tasks";
 const FILES_COLLECTION = "taskFiles";
 
@@ -50,20 +49,16 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 export const useTasksList = () =>
-  useQuery({
-    queryKey: KEY,
-    queryFn: async () => {
-      const snap = await getDocs(query(collection(db, COLLECTION), where("isDeleted", "==", false)));
-      const items = snap.docs.map((d) => toTask(d.id, d.data()));
-      items.sort((a, b) => {
-        if (a.done !== b.done) return a.done ? 1 : -1;
-        const dueCmp = compareNullableAsc(a.dueDate, b.dueDate);
-        if (dueCmp !== 0) return dueCmp;
-        return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
-      });
-      return items;
-    },
-  });
+  useCollectionQuery(
+    () => query(collection(db, COLLECTION), where("isDeleted", "==", false)),
+    toTask,
+    (a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      const dueCmp = compareNullableAsc(a.dueDate, b.dueDate);
+      if (dueCmp !== 0) return dueCmp;
+      return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0;
+    }
+  );
 
 export interface TaskCreateInput {
   title: string;
@@ -74,9 +69,8 @@ export interface TaskCreateInput {
   file?: File | null;
 }
 
-export const useCreateTask = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useCreateTask = () =>
+  useMutation({
     mutationFn: async (input: TaskCreateInput) => {
       const ref = await addDoc(collection(db, COLLECTION), {
         title: input.title,
@@ -99,9 +93,7 @@ export const useCreateTask = () => {
       const snap = await getDoc(ref);
       return toTask(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
 export interface TaskUpdateInput {
   id: string;
@@ -113,29 +105,23 @@ export interface TaskUpdateInput {
   done?: boolean;
 }
 
-export const useUpdateTask = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useUpdateTask = () =>
+  useMutation({
     mutationFn: async ({ id, ...updates }: TaskUpdateInput) => {
       const ref = doc(db, COLLECTION, id);
       await updateDoc(ref, updates);
       const snap = await getDoc(ref);
       return toTask(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useDeleteTask = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useDeleteTask = () =>
+  useMutation({
     mutationFn: async (id: string) => {
       await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
       return { success: true as const };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
 export async function downloadTaskFile(id: string, fileName: string, fileType: string | null): Promise<void> {
   const snap = await getDoc(doc(db, FILES_COLLECTION, id));

@@ -1,10 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
   collection,
   doc,
   getDoc,
-  getDocs,
   query,
   serverTimestamp,
   updateDoc,
@@ -12,9 +11,9 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
 import { compareNullableAsc, toIso } from "../lib/firestoreUtil";
+import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { ScheduleEvent } from "../lib/types";
 
-const KEY = ["schedule"] as const;
 const COLLECTION = "scheduleEvents";
 
 function toScheduleEvent(id: string, data: Record<string, any>): ScheduleEvent {
@@ -32,19 +31,15 @@ function toScheduleEvent(id: string, data: Record<string, any>): ScheduleEvent {
 }
 
 export const useScheduleList = () =>
-  useQuery({
-    queryKey: KEY,
-    queryFn: async () => {
-      const snap = await getDocs(query(collection(db, COLLECTION), where("isDeleted", "==", false)));
-      const items = snap.docs.map((d) => toScheduleEvent(d.id, d.data()));
-      items.sort((a, b) => {
-        if (a.date < b.date) return -1;
-        if (a.date > b.date) return 1;
-        return compareNullableAsc(a.startTime, b.startTime);
-      });
-      return items;
-    },
-  });
+  useCollectionQuery(
+    () => query(collection(db, COLLECTION), where("isDeleted", "==", false)),
+    toScheduleEvent,
+    (a, b) => {
+      if (a.date < b.date) return -1;
+      if (a.date > b.date) return 1;
+      return compareNullableAsc(a.startTime, b.startTime);
+    }
+  );
 
 export interface ScheduleCreateInput {
   title: string;
@@ -55,9 +50,8 @@ export interface ScheduleCreateInput {
   notes: string | null;
 }
 
-export const useCreateSchedule = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useCreateSchedule = () =>
+  useMutation({
     mutationFn: async (input: ScheduleCreateInput) => {
       const ref = await addDoc(collection(db, COLLECTION), {
         ...input,
@@ -68,30 +62,22 @@ export const useCreateSchedule = () => {
       const snap = await getDoc(ref);
       return toScheduleEvent(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useUpdateSchedule = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useUpdateSchedule = () =>
+  useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<ScheduleCreateInput>) => {
       const ref = doc(db, COLLECTION, id);
       await updateDoc(ref, updates);
       const snap = await getDoc(ref);
       return toScheduleEvent(snap.id, snap.data()!);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};
 
-export const useDeleteSchedule = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useDeleteSchedule = () =>
+  useMutation({
     mutationFn: async (id: string) => {
       await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
       return { success: true as const };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
   });
-};

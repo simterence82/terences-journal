@@ -1,53 +1,31 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  serverTimestamp,
-  writeBatch,
-} from "firebase/firestore";
+import { useMutation } from "@tanstack/react-query";
+import { collection, deleteDoc, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
+import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { PendingUser, User, UserRole } from "../lib/types";
 
-const USERS_KEY = ["users"] as const;
-const PENDING_USERS_KEY = ["pendingUsers"] as const;
+function toUser(id: string, data: Record<string, any>): User {
+  return { id, email: data.email, displayName: data.displayName, role: data.role, createdAt: toIso(data.createdAt) };
+}
+
+function toPendingUser(id: string, data: Record<string, any>): PendingUser {
+  return { id, email: data.email, displayName: data.displayName, requestedAt: toIso(data.requestedAt) };
+}
 
 export const useUsersList = () =>
-  useQuery({
-    queryKey: USERS_KEY,
-    queryFn: async () => {
-      const snapshot = await getDocs(collection(db, "users"));
-      return snapshot.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          email: data.email,
-          displayName: data.displayName,
-          role: data.role,
-          createdAt: toIso(data.createdAt),
-        } as User;
-      });
-    },
-  });
+  useCollectionQuery(
+    () => collection(db, "users"),
+    toUser,
+    (a, b) => ((a.createdAt ?? "") < (b.createdAt ?? "") ? -1 : (a.createdAt ?? "") > (b.createdAt ?? "") ? 1 : 0)
+  );
 
 export const usePendingUsersList = () =>
-  useQuery({
-    queryKey: PENDING_USERS_KEY,
-    queryFn: async () => {
-      const snapshot = await getDocs(collection(db, "pendingUsers"));
-      return snapshot.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          email: data.email,
-          displayName: data.displayName,
-          requestedAt: toIso(data.requestedAt),
-        } as PendingUser;
-      });
-    },
-  });
+  useCollectionQuery(
+    () => collection(db, "pendingUsers"),
+    toPendingUser,
+    (a, b) => (a.requestedAt < b.requestedAt ? -1 : a.requestedAt > b.requestedAt ? 1 : 0)
+  );
 
 export interface ApproveUserInput {
   id: string;
@@ -56,9 +34,8 @@ export interface ApproveUserInput {
   role: UserRole;
 }
 
-export const useApproveUser = () => {
-  const qc = useQueryClient();
-  return useMutation({
+export const useApproveUser = () =>
+  useMutation({
     mutationFn: async ({ id, email, displayName, role }: ApproveUserInput) => {
       const batch = writeBatch(db);
       batch.set(doc(db, "users", id), {
@@ -70,25 +47,30 @@ export const useApproveUser = () => {
       batch.delete(doc(db, "pendingUsers", id));
       await batch.commit();
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: USERS_KEY });
-      qc.invalidateQueries({ queryKey: PENDING_USERS_KEY });
+  });
+
+export const useDenyUser = () =>
+  useMutation({
+    mutationFn: (id: string) => deleteDoc(doc(db, "pendingUsers", id)),
+  });
+
+export interface DeleteUserInput {
+  id: string;
+  email: string;
+}
+
+export const useDeleteUser = () =>
+  useMutation({
+    // Deleting the users/{uid} doc revokes app access immediately. The
+    // browser can't delete the underlying Firebase Auth account (that needs
+    // Admin SDK privileges), so it queues a pendingAuthDeletions doc instead
+    // -- a scheduled GitHub Actions job picks this up every few minutes and
+    // deletes the Auth account, freeing the email for someone else to sign
+    // up with.
+    mutationFn: async ({ id, email }: DeleteUserInput) => {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "users", id));
+      batch.set(doc(db, "pendingAuthDeletions", id), { email, requestedAt: serverTimestamp() });
+      await batch.commit();
     },
   });
-};
-
-export const useDenyUser = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => deleteDoc(doc(db, "pendingUsers", id)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: PENDING_USERS_KEY }),
-  });
-};
-
-export const useDeleteUser = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) => deleteDoc(doc(db, "users", id)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: USERS_KEY }),
-  });
-};
