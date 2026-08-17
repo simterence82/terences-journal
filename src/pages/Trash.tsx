@@ -102,63 +102,103 @@ export const TrashPage: React.FC = () => {
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow">
-        {listQuery.isLoading ? (
-          <div className="p-6">
-            <Skeleton style={{ height: 200 }} />
-          </div>
-        ) : items.length === 0 ? (
+      {listQuery.isLoading ? (
+        <div className="rounded-lg border border-border bg-card p-6 shadow">
+          <Skeleton style={{ height: 200 }} />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card shadow">
           <EmptyState icon={<Trash size={28} />} message="Trash Bin is empty." />
-        ) : (
-          <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead className="bg-surface">
-              <tr>
-                <th className="w-10 border-b border-border px-4 py-3 text-center">
-                  <Checkbox checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
-                </th>
-                {["Type", "Title", "Deleted", "Auto-delete in", ""].map((h) => (
-                  <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {h}
+        </div>
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
+            <table className="w-full whitespace-nowrap text-[0.8125rem]">
+              <thead className="bg-surface">
+                <tr>
+                  <th className="w-10 border-b border-border px-4 py-3 text-center">
+                    <Checkbox checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" />
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={itemKey(item)} className="hover:bg-surface">
-                  <td className="border-b border-border px-4 py-3 text-center">
-                    <Checkbox checked={selected.has(itemKey(item))} onChange={() => toggleSelected(item)} aria-label={`Select ${item.title}`} />
-                  </td>
-                  <td className="border-b border-border px-4 py-3">
-                    <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
-                  </td>
-                  <td className="border-b border-border px-4 py-3 text-foreground">
-                    <div className="flex items-center gap-2">
-                      {item.hasFile && <Paperclip size={14} className="text-muted-foreground" />}
-                      <div className="flex flex-col">
-                        <span className="font-medium">{item.title}</span>
-                        <span className="text-xs text-muted-foreground">{item.subtitle}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="border-b border-border px-4 py-3 text-foreground">{new Date(item.deletedAt).toLocaleDateString("en-SG")}</td>
-                  <td className="border-b border-border px-4 py-3 text-foreground">{daysUntil(item.purgeAt)} days</td>
-                  <td className="border-b border-border px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleRestore(item)} aria-label="Restore">
-                        <RotateCcw size={16} />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => setPermanentTarget(item)} aria-label="Delete permanently">
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
-                  </td>
+                  {["Type", "Title", "Deleted", "Auto-delete in", ""].map((h) => (
+                    <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={itemKey(item)} className="hover:bg-surface">
+                    <td className="border-b border-border px-4 py-3 text-center">
+                      <Checkbox checked={selected.has(itemKey(item))} onChange={() => toggleSelected(item)} aria-label={`Select ${item.title}`} />
+                    </td>
+                    <td className="border-b border-border px-4 py-3">
+                      <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
+                    </td>
+                    <td className="border-b border-border px-4 py-3 text-foreground">
+                      <div className="flex items-center gap-2">
+                        {item.hasFile && <Paperclip size={14} className="text-muted-foreground" />}
+                        <div className="flex flex-col">
+                          <span className="font-medium">{item.title}</span>
+                          <span className="text-xs text-muted-foreground">{item.subtitle}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="border-b border-border px-4 py-3 text-foreground">{new Date(item.deletedAt).toLocaleDateString("en-SG")}</td>
+                    <td className="border-b border-border px-4 py-3 text-foreground">{daysUntil(item.purgeAt)} days</td>
+                    <td className="border-b border-border px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleRestore(item)} aria-label="Restore">
+                          <RotateCcw size={16} />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => setPermanentTarget(item)} aria-label="Delete permanently">
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col gap-3 md:hidden">
+            <label className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
+              <Checkbox checked={allSelected} onChange={toggleSelectAll} aria-label="Select all" /> Select all
+            </label>
+            {items.map((item) => (
+              <div key={itemKey(item)} className="rounded-lg border border-border bg-card p-4 shadow">
+                <div className="flex items-start gap-3">
+                  <Checkbox checked={selected.has(itemKey(item))} onChange={() => toggleSelected(item)} aria-label={`Select ${item.title}`} className="mt-1" />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex items-center gap-2">
+                      {item.hasFile && <Paperclip size={14} className="shrink-0 text-muted-foreground" />}
+                      <span className="truncate font-medium text-foreground">{item.title}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{item.subtitle}</span>
+                    <div className="mt-1">
+                      <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between border-t border-border pt-2 text-xs text-muted-foreground">
+                  <span>
+                    Deleted {new Date(item.deletedAt).toLocaleDateString("en-SG")} &middot; auto-delete in {daysUntil(item.purgeAt)} days
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleRestore(item)} aria-label="Restore">
+                      <RotateCcw size={16} />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => setPermanentTarget(item)} aria-label="Delete permanently">
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <ConfirmDialog
         open={permanentTarget !== null}

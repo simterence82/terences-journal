@@ -114,47 +114,74 @@ export const SchedulePage: React.FC = () => {
         </form>
       </Dialog>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow">
-        {listQuery.isLoading ? (
-          <div className="p-6">
-            <Skeleton style={{ height: 200 }} />
-          </div>
-        ) : entries.length === 0 ? (
+      {listQuery.isLoading ? (
+        <div className="rounded-lg border border-border bg-card p-6 shadow">
+          <Skeleton style={{ height: 200 }} />
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card shadow">
           <EmptyState icon={<CalendarClock size={28} />} message="No schedule entries yet." />
-        ) : (
-          <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead className="bg-surface">
-              <tr>
-                {["Date", "Time", "Title", "Location", "Notes", ""].map((h) => (
-                  <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-surface">
-                  <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
-                  <td className="border-b border-border px-4 py-3 text-foreground">
-                    {entry.startTime ? `${entry.startTime}${entry.endTime ? ` - ${entry.endTime}` : ""}` : "-"}
-                  </td>
-                  <td className="border-b border-border px-4 py-3 font-medium text-foreground">{entry.title}</td>
-                  <td className="border-b border-border px-4 py-3 text-foreground">{entry.location || "-"}</td>
-                  <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                  {isAdmin && (
-                    <td className="border-b border-border px-4 py-3">
-                      <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
-                        <Trash2 size={16} />
-                      </Button>
-                    </td>
-                  )}
+        </div>
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
+            <table className="w-full whitespace-nowrap text-[0.8125rem]">
+              <thead className="bg-surface">
+                <tr>
+                  {["Date", "Time", "Title", "Location", "Notes", ""].map((h) => (
+                    <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {entries.map((entry) => (
+                  <tr key={entry.id} className="hover:bg-surface">
+                    <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
+                    <td className="border-b border-border px-4 py-3 text-foreground">
+                      {entry.startTime ? `${entry.startTime}${entry.endTime ? ` - ${entry.endTime}` : ""}` : "-"}
+                    </td>
+                    <td className="border-b border-border px-4 py-3 font-medium text-foreground">{entry.title}</td>
+                    <td className="border-b border-border px-4 py-3 text-foreground">{entry.location || "-"}</td>
+                    <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
+                    {isAdmin && (
+                      <td className="border-b border-border px-4 py-3">
+                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
+                          <Trash2 size={16} />
+                        </Button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col gap-3 md:hidden">
+            {entries.map((entry) => (
+              <div key={entry.id} className="rounded-lg border border-border bg-card p-4 shadow">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium text-foreground">{entry.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(entry.date).toLocaleDateString("en-SG")}
+                      {entry.startTime && ` · ${entry.startTime}${entry.endTime ? ` - ${entry.endTime}` : ""}`}
+                    </span>
+                    {entry.location && <span className="text-xs text-muted-foreground">{entry.location}</span>}
+                  </div>
+                  {isAdmin && (
+                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
+                      <Trash2 size={16} />
+                    </Button>
+                  )}
+                </div>
+                {entry.notes && <p className="mt-2 border-t border-border pt-2 text-xs text-muted-foreground">{entry.notes}</p>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <ConfirmDialog
         open={deleteTarget.isOpen}

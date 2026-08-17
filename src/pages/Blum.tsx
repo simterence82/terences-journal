@@ -180,63 +180,103 @@ export const BlumPage: React.FC = () => {
         <SummaryCard label="Pending Reimbursement" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card shadow">
-        {listQuery.isLoading ? (
-          <div className="p-6">
-            <Skeleton style={{ height: 200 }} />
-          </div>
-        ) : entries.length === 0 ? (
+      {listQuery.isLoading ? (
+        <div className="rounded-lg border border-border bg-card p-6 shadow">
+          <Skeleton style={{ height: 200 }} />
+        </div>
+      ) : entries.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card shadow">
           <EmptyState icon={<Package size={28} />} message="No Blum orders recorded yet." />
-        ) : (
-          <table className="w-full whitespace-nowrap text-[0.8125rem]">
-            <thead className="bg-surface">
-              <tr>
-                {["Date", "Order Name", "Amount", "Notes", "Paid", "Invoice Requested", "Reimbursed", ""].map((h) => (
-                  <th
-                    key={h}
-                    className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
-                      CHECKBOX_COLUMNS.includes(h) ? "text-center" : "text-left"
-                    }`}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id} className="hover:bg-surface">
-                  <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
-                  <td className="border-b border-border px-4 py-3 text-foreground">{entry.orderName}</td>
-                  <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.amount)}</td>
-                  <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                  <td className="border-b border-border px-4 py-3 text-center">
-                    <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
-                  </td>
-                  <td className="border-b border-border px-4 py-3 text-center">
-                    <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} />
-                  </td>
-                  <td className="border-b border-border px-4 py-3 text-center">
-                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
-                  </td>
-                  <td className="border-b border-border px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit order">
-                        <Pencil size={16} />
-                      </Button>
-                      {isAdmin && (
-                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete order">
-                          <Trash2 size={16} />
-                        </Button>
-                      )}
-                    </div>
-                  </td>
+        </div>
+      ) : (
+        <>
+          <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
+            <table className="w-full whitespace-nowrap text-[0.8125rem]">
+              <thead className="bg-surface">
+                <tr>
+                  {["Date", "Order Name", "Amount", "Notes", "Paid", "Invoice Requested", "Reimbursed", ""].map((h) => (
+                    <th
+                      key={h}
+                      className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
+                        CHECKBOX_COLUMNS.includes(h) ? "text-center" : "text-left"
+                      }`}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {entries.map((entry) => (
+                  <tr key={entry.id} className="hover:bg-surface">
+                    <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
+                    <td className="border-b border-border px-4 py-3 text-foreground">{entry.orderName}</td>
+                    <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.amount)}</td>
+                    <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
+                    <td className="border-b border-border px-4 py-3 text-center">
+                      <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
+                    </td>
+                    <td className="border-b border-border px-4 py-3 text-center">
+                      <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} />
+                    </td>
+                    <td className="border-b border-border px-4 py-3 text-center">
+                      <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
+                    </td>
+                    <td className="border-b border-border px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit order">
+                          <Pencil size={16} />
+                        </Button>
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete order">
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col gap-3 md:hidden">
+            {entries.map((entry) => (
+              <div key={entry.id} className="rounded-lg border border-border bg-card p-4 shadow">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium text-foreground">{entry.orderName}</span>
+                    <span className="text-xs text-muted-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</span>
+                  </div>
+                  <span className="shrink-0 font-semibold text-foreground">{formatSGD(entry.amount)}</span>
+                </div>
+                {entry.notes && <p className="mt-2 text-xs text-muted-foreground">{entry.notes}</p>}
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-foreground">
+                  <label className="flex items-center gap-1.5">
+                    <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} /> Paid
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} /> Invoice Requested
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Reimbursed
+                  </label>
+                </div>
+                <div className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2">
+                  <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit order">
+                    <Pencil size={16} />
+                  </Button>
+                  {isAdmin && (
+                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete order">
+                      <Trash2 size={16} />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <ConfirmDialog
         open={deleteTarget.isOpen}

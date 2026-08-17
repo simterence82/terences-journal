@@ -63,105 +63,160 @@ export const UsersPage: React.FC = () => {
 
       <div className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold text-foreground">Pending Requests</h2>
-        <div className="overflow-x-auto rounded-lg border border-border bg-card shadow">
-          {pendingQuery.isLoading ? (
-            <div className="p-6">
-              <Skeleton style={{ height: 100 }} />
-            </div>
-          ) : pendingUsers.length === 0 ? (
+        {pendingQuery.isLoading ? (
+          <div className="rounded-lg border border-border bg-card p-6 shadow">
+            <Skeleton style={{ height: 100 }} />
+          </div>
+        ) : pendingUsers.length === 0 ? (
+          <div className="rounded-lg border border-border bg-card shadow">
             <EmptyState icon={<UserCheck size={26} />} message="No pending requests." className="py-10" />
-          ) : (
-            <table className="w-full text-[0.8125rem]">
-              <thead className="bg-surface">
-                <tr>
-                  {["Display Name", "Username", "Requested", ""].map((h) => (
-                    <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pendingUsers.map((p) => (
-                  <tr key={p.id} className="hover:bg-surface">
-                    <td className="border-b border-border px-4 py-3 text-foreground">{p.displayName}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{p.email}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">
-                      {p.requestedAt ? new Date(p.requestedAt).toLocaleDateString("en-SG") : "-"}
-                    </td>
-                    <td className="border-b border-border px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={approveMutation.isPending}
-                          onClick={() => handleApprove(p, "member")}
-                        >
-                          <Check size={14} /> Approve as Member
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={approveMutation.isPending}
-                          onClick={() => handleApprove(p, "admin")}
-                        >
-                          <Check size={14} /> Approve as Admin
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => denyTarget.open(p)}>
-                          <X size={14} /> Deny
-                        </Button>
-                      </div>
-                    </td>
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
+              <table className="w-full text-[0.8125rem]">
+                <thead className="bg-surface">
+                  <tr>
+                    {["Display Name", "Username", "Requested", ""].map((h) => (
+                      <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                </thead>
+                <tbody>
+                  {pendingUsers.map((p) => (
+                    <tr key={p.id} className="hover:bg-surface">
+                      <td className="border-b border-border px-4 py-3 text-foreground">{p.displayName}</td>
+                      <td className="border-b border-border px-4 py-3 text-foreground">{p.email}</td>
+                      <td className="border-b border-border px-4 py-3 text-foreground">
+                        {p.requestedAt ? new Date(p.requestedAt).toLocaleDateString("en-SG") : "-"}
+                      </td>
+                      <td className="border-b border-border px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={approveMutation.isPending}
+                            onClick={() => handleApprove(p, "member")}
+                          >
+                            <Check size={14} /> Approve as Member
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={approveMutation.isPending}
+                            onClick={() => handleApprove(p, "admin")}
+                          >
+                            <Check size={14} /> Approve as Admin
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => denyTarget.open(p)}>
+                            <X size={14} /> Deny
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-col gap-3 md:hidden">
+              {pendingUsers.map((p) => (
+                <div key={p.id} className="rounded-lg border border-border bg-card p-4 shadow">
+                  <div className="flex flex-col">
+                    <span className="font-medium text-foreground">{p.displayName}</span>
+                    <span className="text-xs text-muted-foreground">{p.email}</span>
+                    <span className="text-xs text-muted-foreground">
+                      Requested {p.requestedAt ? new Date(p.requestedAt).toLocaleDateString("en-SG") : "-"}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                    <Button variant="outline" size="sm" disabled={approveMutation.isPending} onClick={() => handleApprove(p, "member")}>
+                      <Check size={14} /> Approve as Member
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled={approveMutation.isPending} onClick={() => handleApprove(p, "admin")}>
+                      <Check size={14} /> Approve as Admin
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => denyTarget.open(p)}>
+                      <X size={14} /> Deny
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold text-foreground">Active Users</h2>
-        <div className="overflow-x-auto rounded-lg border border-border bg-card shadow">
-          {listQuery.isLoading ? (
-            <div className="p-6">
-              <Skeleton style={{ height: 200 }} />
-            </div>
-          ) : users.length === 0 ? (
+        {listQuery.isLoading ? (
+          <div className="rounded-lg border border-border bg-card p-6 shadow">
+            <Skeleton style={{ height: 200 }} />
+          </div>
+        ) : users.length === 0 ? (
+          <div className="rounded-lg border border-border bg-card shadow">
             <EmptyState icon={<UsersIcon size={28} />} message="No users yet." />
-          ) : (
-            <table className="w-full text-[0.8125rem]">
-              <thead className="bg-surface">
-                <tr>
-                  {["Display Name", "Username", "Role", "Created", ""].map((h) => (
-                    <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {h}
-                    </th>
+          </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
+              <table className="w-full text-[0.8125rem]">
+                <thead className="bg-surface">
+                  <tr>
+                    {["Display Name", "Username", "Role", "Created", ""].map((h) => (
+                      <th key={h} className="border-b border-border px-4 py-3 text-left text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-surface">
+                      <td className="border-b border-border px-4 py-3 text-foreground">{u.displayName}</td>
+                      <td className="border-b border-border px-4 py-3 text-foreground">{u.email}</td>
+                      <td className="border-b border-border px-4 py-3">
+                        <Badge variant={u.role === "admin" ? "primary" : "secondary"}>{u.role}</Badge>
+                      </td>
+                      <td className="border-b border-border px-4 py-3 text-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</td>
+                      <td className="border-b border-border px-4 py-3">
+                        {u.id !== currentUserId && (
+                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
+                            <Trash2 size={16} />
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-surface">
-                    <td className="border-b border-border px-4 py-3 text-foreground">{u.displayName}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{u.email}</td>
-                    <td className="border-b border-border px-4 py-3">
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-col gap-3 md:hidden">
+              {users.map((u) => (
+                <div key={u.id} className="rounded-lg border border-border bg-card p-4 shadow">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium text-foreground">{u.displayName}</span>
+                      <span className="truncate text-xs text-muted-foreground">{u.email}</span>
+                      <span className="text-xs text-muted-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
                       <Badge variant={u.role === "admin" ? "primary" : "secondary"}>{u.role}</Badge>
-                    </td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</td>
-                    <td className="border-b border-border px-4 py-3">
                       {u.id !== currentUserId && (
                         <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
                           <Trash2 size={16} />
                         </Button>
                       )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <ConfirmDialog
