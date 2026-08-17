@@ -74,6 +74,9 @@ jobs:
     needs: build
     if: needs.build.outputs.configured == 'true' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: studio-leads
     permissions:
       contents: read
     steps:
@@ -89,3 +92,19 @@ jobs:
           projectId: ${{ vars.STUDIO_LEADS_FIREBASE_PROJECT_ID }}
           entryPoint: studio-leads
           channelId: live
+      # Firestore/Storage security rules aren't part of the hosting deploy
+      # above -- they live in firestore.rules/storage.rules (see
+      # firebase.json) and need their own deploy so a rules change lands
+      # the moment this workflow runs, not only when someone remembers to
+      # paste it into the Firebase Console by hand.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Deploy Firestore & Storage rules
+        run: |
+          echo "$FIREBASE_SERVICE_ACCOUNT" > "$RUNNER_TEMP/firebase-service-account.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/firebase-service-account.json"
+          npx firebase-tools@13 deploy --only firestore:rules,storage:rules --project "$PROJECT_ID" --non-interactive
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.STUDIO_LEADS_FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ vars.STUDIO_LEADS_FIREBASE_PROJECT_ID }}

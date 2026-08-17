@@ -110,7 +110,10 @@ open from inside the app, not something to paste into a public channel.
 ### 2. Publish Firestore rules
 
 **Build → Firestore Database → Rules** → paste in `firestore.rules` from
-this folder → **Publish**.
+this folder → **Publish**. (This is a one-time bootstrap step -- once the
+GitHub Actions deploy is set up per the *Deploying* section below, future
+edits to this file deploy automatically on push and you won't need to
+paste into the Console again.)
 
 ### 3. Enable Cloud Storage + publish its rules
 
@@ -120,7 +123,7 @@ the prompts to provision the default bucket (this may require the project
 be on the pay-as-you-go **Blaze** plan — Storage's free tier is generous
 for a small studio's use, but the plan itself needs enabling). Then
 **Storage → Rules** → paste in `storage.rules` from this folder →
-**Publish**.
+**Publish**. (Same one-time-bootstrap note as above.)
 
 ### 4. Run locally
 
@@ -158,6 +161,13 @@ To turn it on:
    **Firebase Console → Project settings → Service accounts → Generate new
    private key**. This downloads a JSON file — keep it secret, never commit
    it.
+   - This same key also deploys `firestore.rules`/`storage.rules` on every
+     push to `master` (see below), which needs more than the default
+     Hosting-only role. In **Google Cloud Console → IAM & Admin → IAM**,
+     find that service account and make sure it also has **Cloud Firestore
+     Admin** and **Firebase Rules Admin** (Storage's rules deploy under the
+     same Firebase Rules Admin role). Without these, hosting still deploys
+     fine but the rules-deploy step fails and the workflow run shows red.
 2. **Repo Settings → Secrets and variables → Actions → Secrets → New
    repository secret**: name it `STUDIO_LEADS_FIREBASE_SERVICE_ACCOUNT`,
    paste the entire JSON file contents as the value.
@@ -174,7 +184,12 @@ To turn it on:
 Until those are set, the workflow skips the deploy steps (it says so in
 the run log), so it's safe to have merged before Firebase is set up. Once
 they're set, the next push to `master` publishes Studio Leads at
-`https://<STUDIO_LEADS_FIREBASE_PROJECT_ID>.web.app`.
+`https://<STUDIO_LEADS_FIREBASE_PROJECT_ID>.web.app` **and** deploys
+`firestore.rules`/`storage.rules` to the same project -- editing either
+file and pushing is enough, no manual Console paste needed from then on.
+(Pull request preview deploys only publish the Hosting preview channel,
+not rules -- rules aren't channel-scoped, so they only deploy on the real
+push to `master`.)
 
 You can also deploy by hand from your machine instead of via Actions:
 
