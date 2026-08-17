@@ -156,7 +156,7 @@ export const DashboardPage: React.FC = () => {
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-ink">Needs Attention</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">Leads Status</h2>
           <Link to="/leads" className="text-[0.8125rem] text-brand hover:underline">
             View all leads
           </Link>
