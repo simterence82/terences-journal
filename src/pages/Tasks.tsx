@@ -63,11 +63,22 @@ export const TasksPage: React.FC = () => {
   const doneTasks = tasks.filter((t) => t.done);
   const visibleTasks = statusTab === "open" ? openTasks : doneTasks;
 
+  const allVisibleSelected = visibleTasks.length > 0 && visibleTasks.every((t) => selected.has(t.id));
+
   const toggleSelected = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visibleTasks.forEach((t) => next.delete(t.id));
+      else visibleTasks.forEach((t) => next.add(t.id));
       return next;
     });
   };
@@ -171,7 +182,13 @@ export const TasksPage: React.FC = () => {
           <h1 className="font-display text-3xl font-semibold text-foreground">Outstanding Tasks</h1>
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">{openTasks.length} open of {tasks.length} total</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {isAdmin && visibleTasks.length > 0 && (
+            <label className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-muted-foreground">
+              <Checkbox checked={allVisibleSelected} onChange={toggleSelectAll} aria-label="Select all" />
+              Select All
+            </label>
+          )}
           {isAdmin && selected.size > 0 && (
             <Button variant="destructive" onClick={() => setIsBulkDeleteOpen(true)}>
               <Trash2 size={16} /> Delete Selected ({selected.size})

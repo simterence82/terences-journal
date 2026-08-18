@@ -55,11 +55,22 @@ export const IssuesPage: React.FC = () => {
   const resolvedIssues = issues.filter((i) => i.resolved);
   const visibleIssues = statusTab === "unresolved" ? unresolvedIssues : resolvedIssues;
 
+  const allVisibleSelected = visibleIssues.length > 0 && visibleIssues.every((i) => selected.has(i.id));
+
   const toggleSelected = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allVisibleSelected) visibleIssues.forEach((i) => next.delete(i.id));
+      else visibleIssues.forEach((i) => next.add(i.id));
       return next;
     });
   };
@@ -150,7 +161,13 @@ export const IssuesPage: React.FC = () => {
           <h1 className="font-display text-3xl font-semibold text-foreground">Outstanding Issues</h1>
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">{unresolvedIssues.length} unresolved of {issues.length} total</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {isAdmin && visibleIssues.length > 0 && (
+            <label className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-muted-foreground">
+              <Checkbox checked={allVisibleSelected} onChange={toggleSelectAll} aria-label="Select all" />
+              Select All
+            </label>
+          )}
           {isAdmin && selected.size > 0 && (
             <Button variant="destructive" onClick={() => setIsBulkDeleteOpen(true)}>
               <Trash2 size={16} /> Delete Selected ({selected.size})
