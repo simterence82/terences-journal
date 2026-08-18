@@ -6,22 +6,19 @@ import {
   getDoc,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
+import { cloudinaryDownloadUrl, uploadToCloudinary } from "../lib/cloudinary";
 import { compareNullableAsc, toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { Task, TaskPriority } from "../lib/types";
 
 const COLLECTION = "tasks";
-const FILES_COLLECTION = "taskFiles";
-
-// Firestore documents are capped at 1MiB; base64 inflates raw bytes by ~33%,
-// so the effective raw-file ceiling here is roughly 700 * 1024 bytes. Not
-// enforced client-side -- an oversized file simply fails the setDoc below and
-// surfaces via the mutation's onError.
+// Legacy sibling collection: attachments uploaded before the Cloudinary
+// migration are still stored here as base64 text, kept only for reading.
+const LEGACY_FILES_COLLECTION = "taskFiles";
 
 function toTask(id: string, data: Record<string, any>): Task {
   return {
@@ -34,18 +31,10 @@ function toTask(id: string, data: Record<string, any>): Task {
     assignedTo: data.assignedTo,
     fileName: data.fileName,
     fileType: data.fileType,
+    fileUrl: data.fileUrl ?? null,
     createdBy: data.createdBy,
     createdAt: toIso(data.createdAt),
   };
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 export const useTasksList = () =>
@@ -72,6 +61,7 @@ export interface TaskCreateInput {
 export const useCreateTask = () =>
   useMutation({
     mutationFn: async (input: TaskCreateInput) => {
+      const uploaded = input.file ? await uploadToCloudinary(input.file) : null;
       const ref = await addDoc(collection(db, COLLECTION), {
         title: input.title,
         description: input.description ?? null,
@@ -81,15 +71,13 @@ export const useCreateTask = () =>
         assignedTo: input.assignedTo ?? null,
         fileName: input.file?.name ?? null,
         fileType: input.file ? input.file.type || "application/octet-stream" : null,
+        fileUrl: uploaded?.url ?? null,
+        filePublicId: uploaded?.publicId ?? null,
         hasFile: !!input.file,
         createdBy: auth.currentUser?.uid ?? null,
         createdAt: serverTimestamp(),
         isDeleted: false,
       });
-      if (input.file) {
-        const fileData = await fileToBase64(input.file);
-        await setDoc(doc(db, FILES_COLLECTION, ref.id), { fileData });
-      }
       const snap = await getDoc(ref);
       return toTask(snap.id, snap.data()!);
     },
@@ -123,8 +111,9 @@ export const useDeleteTask = () =>
     },
   });
 
+/** Legacy fallback only -- attachments uploaded before the Cloudinary migration. */
 export async function fetchTaskFileBlob(id: string, fileType: string | null): Promise<Blob> {
-  const snap = await getDoc(doc(db, FILES_COLLECTION, id));
+  const snap = await getDoc(doc(db, LEGACY_FILES_COLLECTION, id));
   if (!snap.exists()) throw new Error("File not found");
   const { fileData } = snap.data() as { fileData: string };
   const binary = atob(fileData);
@@ -133,7 +122,16 @@ export async function fetchTaskFileBlob(id: string, fileType: string | null): Pr
   return new Blob([bytes], { type: fileType ?? "application/octet-stream" });
 }
 
-export async function downloadTaskFile(id: string, fileName: string, fileType: string | null): Promise<void> {
+export async function downloadTaskFile(id: string, fileName: string, fileType: string | null, fileUrl?: string | null): Promise<void> {
+  if (fileUrl) {
+    const a = document.createElement("a");
+    a.href = cloudinaryDownloadUrl(fileUrl);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return;
+  }
   const blob = await fetchTaskFileBlob(id, fileType);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

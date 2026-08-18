@@ -5,7 +5,15 @@ import { useMultiCollectionQuery } from "../lib/useFirestoreQuery";
 import type { FileArchiveItem } from "../lib/types";
 
 function toFileArchiveItem(kind: "tasks" | "issues", id: string, data: Record<string, any>): FileArchiveItem {
-  return { kind, id, sourceTitle: data.title, fileName: data.fileName, fileType: data.fileType, createdAt: toIso(data.createdAt) };
+  return {
+    kind,
+    id,
+    sourceTitle: data.title,
+    fileName: data.fileName,
+    fileType: data.fileType,
+    fileUrl: data.fileUrl ?? null,
+    createdAt: toIso(data.createdAt),
+  };
 }
 
 export const useFilesArchiveList = () =>

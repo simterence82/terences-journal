@@ -7,9 +7,10 @@ personal assistant to collaborate on daily work.
 
 This is a **pure static frontend** (React + Vite) — there is no backend
 server at all. The browser talks to Firebase directly: Authentication for
-login, Cloud Firestore for every record and file attachment. That makes it
-deployable to plain static hosting like **GitHub Pages**, with GitHub
-Actions handling the build/deploy and a small daily maintenance job.
+login, Cloud Firestore for every record, and Cloudinary for file
+attachments. That makes it deployable to plain static hosting like
+**GitHub Pages**, with GitHub Actions handling the build/deploy and a small
+daily maintenance job.
 
 ## Features
 
@@ -51,7 +52,7 @@ Actions handling the build/deploy and a small daily maintenance job.
 |---|---|
 | Frontend | React 18 + Vite, TypeScript, Tailwind CSS |
 | Data & auth | Firebase Authentication + Cloud Firestore, called directly from the browser (`firebase` client SDK) |
-| File uploads | Base64 text stored on the Firestore document — no Cloud Storage, no billing plan needed |
+| File uploads | Direct unsigned browser upload to Cloudinary — no backend, no Firebase billing plan needed |
 | Data fetching | Real-time Firestore listeners (`onSnapshot`) for every list view, TanStack React Query for mutations |
 | Hosting | GitHub Pages, built and deployed by GitHub Actions |
 | Trash auto-purge | A small script (`scripts/purgeExpiredTrash.ts`, Firebase Admin SDK) run on a daily GitHub Actions schedule |
@@ -75,14 +76,15 @@ database file.
   a record sets `isDeleted: true` (the Trash Bin) rather than removing the
   document; a scheduled GitHub Actions job permanently purges anything
   soft-deleted for more than 120 days.
-- **File attachments** (task files, issue PDFs/images) are stored as base64
-  text in a sibling Firestore document (`taskFiles/{id}` / `issueFiles/{id}`)
-  so list views never have to load attachment bytes. Firestore caps a
-  document at 1MiB, so attachments are limited to about 700KB before base64
-  encoding — fine for most PDFs/scans, but a full-resolution phone photo
-  could be too large. (Cloud Storage would remove that cap, but requires
-  upgrading the Firebase project to a paid Blaze plan, which this setup
-  deliberately avoids.)
+- **File attachments** (task files, issue PDFs/images) are uploaded
+  directly from the browser to **Cloudinary** (a free-tier media host) and
+  only the resulting URL is stored on the task/issue's Firestore document —
+  list views never load attachment bytes. This avoids both Firestore's
+  1MiB document cap and Firebase Cloud Storage's paid Blaze-plan
+  requirement. Attachments created before this was added are still read
+  the old way — as base64 text in a sibling Firestore document
+  (`taskFiles/{id}` / `issueFiles/{id}`) — so nothing already uploaded
+  breaks; only new uploads go to Cloudinary.
 - **Firestore security rules are the only access control** — with no
   backend to gate requests, `firestore.rules` in this repo enforces
   everything: only approved users (a `users/{uid}` doc must exist) can read
@@ -130,9 +132,8 @@ login is an Admin-SDK-only operation this static app can't perform.
 
 This deliberately skips Cloud Storage — it now requires upgrading the
 project to a paid "Blaze" plan (a card on file, even though usage would
-very likely stay within the free tier). File attachments are stored
-directly in Firestore instead (see "Where your data lives" above), which
-needs no billing plan at all.
+very likely stay within the free tier). File attachments go to Cloudinary
+instead (next step), which needs no billing plan at all.
 
 ### 2. Publish Firestore rules (one-time)
 
@@ -144,12 +145,32 @@ your own Google login — a service account key alone isn't enough permission
 for the CLI's deploy command: `firebase login && firebase use --add &&
 firebase deploy --only firestore:rules`.)
 
-### 3. Run the app locally
+### 3. Set up Cloudinary (one-time, ~5 minutes)
+
+Cloudinary is a free-tier media host that accepts direct uploads from the
+browser — no backend needed, same reasoning as skipping Firebase Storage
+above.
+
+1. Sign up at [cloudinary.com](https://cloudinary.com) (free plan is
+   plenty for personal use).
+2. The **Cloud Name** is shown right on the Dashboard home page after
+   signup — copy it.
+3. **Settings** (gear icon) → **Upload** tab → **Upload presets** → **Add
+   upload preset**. Set **Signing Mode** to **Unsigned**, give it any name
+   you like, Save. Copy that preset name.
+
+Neither value is secret — Cloudinary's supported client-only upload flow
+relies on exactly this pair being public, the same trust model as the
+Firebase web config above.
+
+### 4. Run the app locally
 
 ```bash
 npm install
 cp .env.example .env
 # paste the firebaseConfig values from step 1.4 into the VITE_FIREBASE_* vars
+# paste the Cloudinary cloud name + upload preset from step 3 into the
+# VITE_CLOUDINARY_* vars
 npm run dev
 ```
 
@@ -163,8 +184,8 @@ required.
 1. **Repo Settings → Pages → Source: GitHub Actions.**
 2. **Repo Settings → Secrets and variables → Actions:**
    - Under **Variables**, add the six `VITE_FIREBASE_*` values from step 1.4
-     above (they're not secret, but Actions still needs them to bake into
-     the build).
+     and the two `VITE_CLOUDINARY_*` values from step 3 above (none of them
+     are secret, but Actions still needs them to bake into the build).
    - Under **Secrets**, add `FIREBASE_SERVICE_ACCOUNT` — the full contents
      of `firebase-service-account.json` from step 1.5 (this one **is**
      sensitive — it's only used by the scheduled purge and deleted-user-
@@ -221,9 +242,13 @@ the repo's **Actions** tab, or run it locally with `npm run cleanup-users`.
   very large.
 - Firebase's own backup tooling (scheduled Firestore exports) covers this
   app's data — there's no local database file to back up separately.
-- File attachments are capped around 700KB (see "Where your data lives"
-  above). If that becomes limiting, Cloud Storage removes the cap but
-  requires upgrading to Firebase's paid Blaze plan.
+- Deleting a task/issue (even permanently, from the Trash Bin) does not
+  delete its Cloudinary asset — only the Firestore record pointing to it.
+  Orphaned files accumulate against Cloudinary's free-tier storage quota
+  over time; a cleanup script (mirroring `cleanupDeletedUsers.ts`'s
+  pattern) would be a reasonable future addition if that becomes a
+  problem, but at personal-operations scale the free tier has a lot of
+  headroom.
 - GitHub Pages serves everything over HTTPS with client-side routing only
   (`HashRouter` — URLs look like `/#/tasks`), since there's no server to
   rewrite deep-link requests back to `index.html`.

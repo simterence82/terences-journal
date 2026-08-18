@@ -58,8 +58,8 @@ export const FilesArchivePage: React.FC = () => {
                         type="button"
                         onClick={() =>
                           file.kind === "tasks"
-                            ? downloadTaskFile(file.id, file.fileName, file.fileType)
-                            : downloadIssueFile(file.id, file.fileName, file.fileType)
+                            ? downloadTaskFile(file.id, file.fileName, file.fileType, file.fileUrl)
+                            : downloadIssueFile(file.id, file.fileName, file.fileType, file.fileUrl)
                         }
                         className="flex items-center gap-1 text-primary hover:underline"
                       >
@@ -88,8 +88,8 @@ export const FilesArchivePage: React.FC = () => {
                   type="button"
                   onClick={() =>
                     file.kind === "tasks"
-                      ? downloadTaskFile(file.id, file.fileName, file.fileType)
-                      : downloadIssueFile(file.id, file.fileName, file.fileType)
+                      ? downloadTaskFile(file.id, file.fileName, file.fileType, file.fileUrl)
+                      : downloadIssueFile(file.id, file.fileName, file.fileType, file.fileUrl)
                   }
                   className="shrink-0 text-primary"
                   aria-label={`Download ${file.fileName}`}

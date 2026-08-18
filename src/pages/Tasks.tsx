@@ -270,10 +270,10 @@ export const TasksPage: React.FC = () => {
         <FilePreviewDialog
           open={previewTask !== null}
           onOpenChange={(open) => !open && setPreviewTask(null)}
-          fileId={previewTask.id}
           fileName={previewTask.fileName!}
           fileType={previewTask.fileType}
-          fetchBlob={fetchTaskFileBlob}
+          fileUrl={previewTask.fileUrl}
+          loadBlob={previewTask.fileUrl ? undefined : () => fetchTaskFileBlob(previewTask.id, previewTask.fileType)}
         />
       )}
     </div>

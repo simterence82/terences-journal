@@ -2,31 +2,34 @@ import React, { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "./Dialog";
 import { Button } from "./Button";
+import { cloudinaryDownloadUrl } from "../lib/cloudinary";
 
 interface FilePreviewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  fileId: string;
   fileName: string;
   fileType: string | null;
-  fetchBlob: (id: string, fileType: string | null) => Promise<Blob>;
+  /** Cloudinary delivery URL, when available -- used directly, no fetch needed. */
+  fileUrl?: string | null;
+  /** Legacy fallback for base64 attachments predating the Cloudinary migration. */
+  loadBlob?: () => Promise<Blob>;
 }
 
-export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOpenChange, fileId, fileName, fileType, fetchBlob }) => {
-  const [url, setUrl] = useState<string | null>(null);
+export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOpenChange, fileName, fileType, fileUrl, loadBlob }) => {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || fileUrl || !loadBlob) return;
     let objectUrl: string | null = null;
     let cancelled = false;
-    setUrl(null);
+    setBlobUrl(null);
     setError(null);
-    fetchBlob(fileId, fileType)
+    loadBlob()
       .then((blob) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
-        setUrl(objectUrl);
+        setBlobUrl(objectUrl);
       })
       .catch(() => {
         if (!cancelled) setError("Couldn't load this file.");
@@ -35,12 +38,14 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [open, fileId]);
+  }, [open, fileUrl, loadBlob]);
+
+  const displayUrl = fileUrl ?? blobUrl;
 
   const handleDownload = () => {
-    if (!url) return;
+    if (!displayUrl) return;
     const a = document.createElement("a");
-    a.href = url;
+    a.href = fileUrl ? cloudinaryDownloadUrl(fileUrl) : displayUrl;
     a.download = fileName;
     document.body.appendChild(a);
     a.click();
@@ -58,12 +63,12 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
       <div className="flex min-h-[12rem] max-h-[65vh] flex-col items-center justify-center overflow-auto rounded border border-border bg-surface">
         {error ? (
           <p className="p-8 text-center text-sm text-muted-foreground">{error}</p>
-        ) : !url ? (
+        ) : !displayUrl ? (
           <p className="p-8 text-center text-sm text-muted-foreground">Loading...</p>
         ) : isImage ? (
-          <img src={url} alt={fileName} className="max-h-[65vh] w-auto object-contain" />
+          <img src={displayUrl} alt={fileName} className="max-h-[65vh] w-auto object-contain" />
         ) : isPdf ? (
-          <iframe src={url} title={fileName} className="h-[65vh] w-full" />
+          <iframe src={displayUrl} title={fileName} className="h-[65vh] w-full" />
         ) : (
           <p className="p-8 text-center text-sm text-muted-foreground">No preview available for this file type.</p>
         )}
@@ -72,7 +77,7 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
         <Button variant="outline" onClick={() => onOpenChange(false)}>
           Close
         </Button>
-        <Button onClick={handleDownload} disabled={!url}>
+        <Button onClick={handleDownload} disabled={!displayUrl}>
           <Download size={16} /> Download
         </Button>
       </DialogFooter>

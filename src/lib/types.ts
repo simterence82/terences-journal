@@ -64,6 +64,8 @@ export interface Task {
   assignedTo: string | null;
   fileName: string | null;
   fileType: string | null;
+  /** Cloudinary delivery URL. Null for legacy attachments stored as base64 in taskFiles/{id}. */
+  fileUrl: string | null;
   createdBy: string | null;
   createdAt: string;
 }
@@ -75,6 +77,8 @@ export interface Issue {
   resolved: boolean;
   fileName: string | null;
   fileType: string | null;
+  /** Cloudinary delivery URL. Null for legacy attachments stored as base64 in issueFiles/{id}. */
+  fileUrl: string | null;
   createdBy: string | null;
   createdAt: string;
 }
@@ -109,6 +113,7 @@ export interface FileArchiveItem {
   sourceTitle: string;
   fileName: string;
   fileType: string | null;
+  fileUrl: string | null;
   createdAt: string;
 }
 

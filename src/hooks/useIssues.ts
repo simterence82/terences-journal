@@ -6,24 +6,21 @@ import {
   getDoc,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { auth, db } from "../lib/firebase";
+import { cloudinaryDownloadUrl, uploadToCloudinary } from "../lib/cloudinary";
 import { toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import type { Issue } from "../lib/types";
 
 const COLLECTION = "issues";
-const FILES_COLLECTION = "issueFiles";
+// Legacy sibling collection: attachments uploaded before the Cloudinary
+// migration are still stored here as base64 text, kept only for reading.
+const LEGACY_FILES_COLLECTION = "issueFiles";
 
 const ALLOWED_ISSUE_FILE_TYPES = ["application/pdf", "image/jpeg", "image/png"];
-
-// Firestore documents are capped at 1MiB; base64 inflates raw bytes by ~33%,
-// so the effective raw-file ceiling here is roughly 700 * 1024 bytes. Not
-// enforced client-side -- an oversized file simply fails the setDoc below and
-// surfaces via the mutation's onError.
 
 function toIssue(id: string, data: Record<string, any>): Issue {
   return {
@@ -33,18 +30,10 @@ function toIssue(id: string, data: Record<string, any>): Issue {
     resolved: data.resolved,
     fileName: data.fileName,
     fileType: data.fileType,
+    fileUrl: data.fileUrl ?? null,
     createdBy: data.createdBy,
     createdAt: toIso(data.createdAt),
   };
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 export const useIssuesList = () =>
@@ -69,21 +58,20 @@ export const useCreateIssue = () =>
       if (input.file && !ALLOWED_ISSUE_FILE_TYPES.includes(input.file.type)) {
         throw new Error("Only PDF, JPEG, or PNG attachments are allowed");
       }
+      const uploaded = input.file ? await uploadToCloudinary(input.file) : null;
       const ref = await addDoc(collection(db, COLLECTION), {
         title: input.title,
         description: input.description ?? null,
         resolved: false,
         fileName: input.file?.name ?? null,
         fileType: input.file ? input.file.type || "application/octet-stream" : null,
+        fileUrl: uploaded?.url ?? null,
+        filePublicId: uploaded?.publicId ?? null,
         hasFile: !!input.file,
         createdBy: auth.currentUser?.uid ?? null,
         createdAt: serverTimestamp(),
         isDeleted: false,
       });
-      if (input.file) {
-        const fileData = await fileToBase64(input.file);
-        await setDoc(doc(db, FILES_COLLECTION, ref.id), { fileData });
-      }
       const snap = await getDoc(ref);
       return toIssue(snap.id, snap.data()!);
     },
@@ -114,8 +102,17 @@ export const useDeleteIssue = () =>
     },
   });
 
-export async function downloadIssueFile(id: string, fileName: string, fileType: string | null): Promise<void> {
-  const snap = await getDoc(doc(db, FILES_COLLECTION, id));
+export async function downloadIssueFile(id: string, fileName: string, fileType: string | null, fileUrl?: string | null): Promise<void> {
+  if (fileUrl) {
+    const a = document.createElement("a");
+    a.href = cloudinaryDownloadUrl(fileUrl);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return;
+  }
+  const snap = await getDoc(doc(db, LEGACY_FILES_COLLECTION, id));
   if (!snap.exists()) return;
   const { fileData } = snap.data() as { fileData: string };
   const binary = atob(fileData);
