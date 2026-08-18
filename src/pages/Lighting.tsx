@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Pencil, Lightbulb, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Lightbulb, DollarSign, Clock, RotateCcw } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useLightingList, useCreateLighting, useUpdateLighting, useDeleteLighting } from "../hooks/useLighting";
@@ -15,7 +15,7 @@ import { Checkbox } from "../components/Checkbox";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
-import type { LightingPurchase } from "../lib/types";
+import type { LightingCostItem, LightingPurchase } from "../lib/types";
 
 const EMPTY_FORM = {
   brand: "",
@@ -24,11 +24,31 @@ const EMPTY_FORM = {
   date: new Date().toISOString().slice(0, 10),
   commissionGiven: "",
   commissionRecipient: "",
-  cost: "",
   selling: "",
   notes: "",
 };
 const CHECKBOX_COLUMNS = ["Paid", "Reimbursed"];
+
+interface CostRow {
+  vendor: string;
+  amount: string;
+}
+const EMPTY_COST_ROW: CostRow = { vendor: "", amount: "" };
+
+function costRowsTotal(rows: CostRow[]): number {
+  return rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+}
+
+function buildCosts(rows: CostRow[]): LightingCostItem[] {
+  const cleaned = rows
+    .filter((r) => r.amount.trim() !== "" || r.vendor.trim() !== "")
+    .map((r) => ({ vendor: r.vendor.trim() || null, amount: Number(r.amount) || 0 }));
+  return cleaned.length > 0 ? cleaned : [{ vendor: null, amount: 0 }];
+}
+
+function costsToRows(costs: LightingCostItem[]): CostRow[] {
+  return costs.length > 0 ? costs.map((c) => ({ vendor: c.vendor ?? "", amount: String(c.amount) })) : [{ ...EMPTY_COST_ROW }];
+}
 
 export const LightingPage: React.FC = () => {
   const { authState } = useAuth();
@@ -43,8 +63,10 @@ export const LightingPage: React.FC = () => {
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [costRows, setCostRows] = useState<CostRow[]>([{ ...EMPTY_COST_ROW }]);
   const [editingEntry, setEditingEntry] = useState<LightingPurchase | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [editCostRows, setEditCostRows] = useState<CostRow[]>([{ ...EMPTY_COST_ROW }]);
 
   const entries = listQuery.data ?? [];
   const totalProfit = entries.reduce((sum, e) => sum + (e.selling - e.cost), 0);
@@ -52,8 +74,17 @@ export const LightingPage: React.FC = () => {
   const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
 
   const setField = (key: keyof typeof EMPTY_FORM) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
-  const resetForm = () => setForm(EMPTY_FORM);
+  const resetForm = () => {
+    setForm(EMPTY_FORM);
+    setCostRows([{ ...EMPTY_COST_ROW }]);
+  };
   const setEditField = (key: keyof typeof EMPTY_FORM) => (value: string) => setEditForm((prev) => ({ ...prev, [key]: value }));
+
+  const addCostRow = (setRows: React.Dispatch<React.SetStateAction<CostRow[]>>) => setRows((prev) => [...prev, { ...EMPTY_COST_ROW }]);
+  const removeCostRow = (setRows: React.Dispatch<React.SetStateAction<CostRow[]>>, index: number) =>
+    setRows((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
+  const updateCostRow = (setRows: React.Dispatch<React.SetStateAction<CostRow[]>>, index: number, field: keyof CostRow, value: string) =>
+    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +100,7 @@ export const LightingPage: React.FC = () => {
         date: form.date,
         commissionGiven: Number(form.commissionGiven) || 0,
         commissionRecipient: form.commissionRecipient || null,
-        cost: Number(form.cost) || 0,
+        costs: buildCosts(costRows),
         selling: Number(form.selling) || 0,
         notes: form.notes || null,
       },
@@ -97,10 +128,10 @@ export const LightingPage: React.FC = () => {
       date: entry.date.slice(0, 10),
       commissionGiven: String(entry.commissionGiven),
       commissionRecipient: entry.commissionRecipient ?? "",
-      cost: String(entry.cost),
       selling: String(entry.selling),
       notes: entry.notes ?? "",
     });
+    setEditCostRows(costsToRows(entry.costs));
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -119,7 +150,7 @@ export const LightingPage: React.FC = () => {
         date: editForm.date,
         commissionGiven: Number(editForm.commissionGiven) || 0,
         commissionRecipient: editForm.commissionRecipient || null,
-        cost: Number(editForm.cost) || 0,
+        costs: buildCosts(editCostRows),
         selling: Number(editForm.selling) || 0,
         notes: editForm.notes || null,
       },
@@ -157,7 +188,7 @@ export const LightingPage: React.FC = () => {
 
       <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
         <DialogHeader>
-          <DialogTitle>Add Lighting Purchase</DialogTitle>
+          <DialogTitle>Add Smart Product Purchase</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={form.brand} onChange={setField("brand")} />
@@ -174,15 +205,49 @@ export const LightingPage: React.FC = () => {
             </div>
           </div>
           <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={form.commissionRecipient} onChange={setField("commissionRecipient")} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-foreground">Cost (S$)</label>
-              <Input type="number" min="0" step="0.01" value={form.cost} onChange={(e) => setField("cost")(e.target.value)} placeholder="0.00" />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[0.8125rem] font-medium text-foreground">Costs (S$)</label>
+              <Button type="button" variant="ghost" size="sm" onClick={() => addCostRow(setCostRows)}>
+                <Plus size={14} /> Add Vendor
+              </Button>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
-              <Input type="number" min="0" step="0.01" value={form.selling} onChange={(e) => setField("selling")(e.target.value)} placeholder="0.00" />
+              {costRows.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Vendor (optional)"
+                    value={row.vendor}
+                    onChange={(e) => updateCostRow(setCostRows, i, "vendor", e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={row.amount}
+                    onChange={(e) => updateCostRow(setCostRows, i, "amount", e.target.value)}
+                    className="w-28"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeCostRow(setCostRows, i)}
+                    disabled={costRows.length === 1}
+                    aria-label="Remove cost"
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
+              ))}
             </div>
+            <div className="text-right text-xs text-muted-foreground">Total cost: {formatSGD(costRowsTotal(costRows))}</div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
+            <Input type="number" min="0" step="0.01" value={form.selling} onChange={(e) => setField("selling")(e.target.value)} placeholder="0.00" />
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
@@ -198,7 +263,7 @@ export const LightingPage: React.FC = () => {
 
       <Dialog open={editingEntry !== null} onOpenChange={(open) => !open && setEditingEntry(null)}>
         <DialogHeader>
-          <DialogTitle>Edit Lighting Purchase</DialogTitle>
+          <DialogTitle>Edit Smart Product Purchase</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
           <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={editForm.brand} onChange={setEditField("brand")} />
@@ -215,15 +280,49 @@ export const LightingPage: React.FC = () => {
             </div>
           </div>
           <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={editForm.commissionRecipient} onChange={setEditField("commissionRecipient")} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-foreground">Cost (S$)</label>
-              <Input type="number" min="0" step="0.01" value={editForm.cost} onChange={(e) => setEditField("cost")(e.target.value)} placeholder="0.00" />
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-[0.8125rem] font-medium text-foreground">Costs (S$)</label>
+              <Button type="button" variant="ghost" size="sm" onClick={() => addCostRow(setEditCostRows)}>
+                <Plus size={14} /> Add Vendor
+              </Button>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
-              <Input type="number" min="0" step="0.01" value={editForm.selling} onChange={(e) => setEditField("selling")(e.target.value)} placeholder="0.00" />
+              {editCostRows.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    placeholder="Vendor (optional)"
+                    value={row.vendor}
+                    onChange={(e) => updateCostRow(setEditCostRows, i, "vendor", e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={row.amount}
+                    onChange={(e) => updateCostRow(setEditCostRows, i, "amount", e.target.value)}
+                    className="w-28"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeCostRow(setEditCostRows, i)}
+                    disabled={editCostRows.length === 1}
+                    aria-label="Remove cost"
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
+              ))}
             </div>
+            <div className="text-right text-xs text-muted-foreground">Total cost: {formatSGD(costRowsTotal(editCostRows))}</div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
+            <Input type="number" min="0" step="0.01" value={editForm.selling} onChange={(e) => setEditField("selling")(e.target.value)} placeholder="0.00" />
           </div>
           <div className="flex flex-col gap-2">
             <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
@@ -277,7 +376,12 @@ export const LightingPage: React.FC = () => {
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.brand}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.clientName}</td>
                     <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.address}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.cost)}</td>
+                    <td
+                      className="border-b border-border px-4 py-3 text-foreground"
+                      title={entry.costs.map((c) => `${c.vendor ?? "Vendor"}: ${formatSGD(c.amount)}`).join(", ")}
+                    >
+                      {formatSGD(entry.cost)}
+                    </td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.selling)}</td>
                     <td className="border-b border-border px-4 py-3 font-semibold text-success">{formatSGD(entry.selling - entry.cost)}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.commissionGiven)}</td>
@@ -324,6 +428,13 @@ export const LightingPage: React.FC = () => {
                   <span>Commission: <span className="text-foreground">{formatSGD(entry.commissionGiven)}</span></span>
                   {entry.commissionRecipient && <span>To: <span className="text-foreground">{entry.commissionRecipient}</span></span>}
                 </div>
+                {entry.costs.length > 1 && (
+                  <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+                    {entry.costs.map((c, i) => (
+                      <span key={i}>{c.vendor || "Vendor"}: <span className="text-foreground">{formatSGD(c.amount)}</span></span>
+                    ))}
+                  </div>
+                )}
                 {entry.notes && <p className="mt-2 text-xs text-muted-foreground">{entry.notes}</p>}
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-foreground">
                   <label className="flex items-center gap-1.5">

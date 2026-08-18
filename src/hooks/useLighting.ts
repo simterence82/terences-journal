@@ -12,11 +12,18 @@ import {
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
-import type { LightingPurchase } from "../lib/types";
+import type { LightingCostItem, LightingPurchase } from "../lib/types";
 
 const COLLECTION = "lightingPurchases";
 
 function toLightingPurchase(id: string, data: Record<string, any>): LightingPurchase {
+  // Older docs only ever had a single `cost` number; wrap it as one
+  // vendor-less cost line so the multi-vendor cost breakdown always has
+  // something to render.
+  const costs: LightingCostItem[] =
+    Array.isArray(data.costs) && data.costs.length > 0
+      ? data.costs.map((c: any) => ({ vendor: c.vendor ?? null, amount: c.amount ?? 0 }))
+      : [{ vendor: null, amount: data.cost ?? 0 }];
   return {
     id,
     brand: data.brand,
@@ -25,7 +32,8 @@ function toLightingPurchase(id: string, data: Record<string, any>): LightingPurc
     date: data.date,
     commissionGiven: data.commissionGiven,
     commissionRecipient: data.commissionRecipient,
-    cost: data.cost,
+    costs,
+    cost: costs.reduce((sum, c) => sum + c.amount, 0),
     selling: data.selling,
     paidToSeller: data.paidToSeller,
     reimbursed: data.reimbursed,
@@ -49,7 +57,7 @@ export interface LightingCreateInput {
   date: string;
   commissionGiven: number;
   commissionRecipient: string | null;
-  cost: number;
+  costs: LightingCostItem[];
   selling: number;
   notes: string | null;
 }
@@ -59,6 +67,7 @@ export const useCreateLighting = () =>
     mutationFn: async (input: LightingCreateInput) => {
       const ref = await addDoc(collection(db, COLLECTION), {
         ...input,
+        cost: input.costs.reduce((sum, c) => sum + c.amount, 0),
         paidToSeller: false,
         reimbursed: false,
         createdBy: auth.currentUser?.uid ?? null,
@@ -77,7 +86,8 @@ export const useUpdateLighting = () =>
       ...updates
     }: { id: string } & Partial<LightingCreateInput> & { paidToSeller?: boolean; reimbursed?: boolean }) => {
       const ref = doc(db, COLLECTION, id);
-      await updateDoc(ref, updates);
+      const { costs, ...rest } = updates;
+      await updateDoc(ref, costs ? { ...rest, costs, cost: costs.reduce((sum, c) => sum + c.amount, 0) } : rest);
       const snap = await getDoc(ref);
       return toLightingPurchase(snap.id, snap.data()!);
     },

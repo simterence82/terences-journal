@@ -15,6 +15,11 @@ export interface PendingUser {
   requestedAt: string;
 }
 
+export interface LightingCostItem {
+  vendor: string | null;
+  amount: number;
+}
+
 export interface LightingPurchase {
   id: string;
   brand: string;
@@ -23,6 +28,8 @@ export interface LightingPurchase {
   date: string;
   commissionGiven: number;
   commissionRecipient: string | null;
+  costs: LightingCostItem[];
+  /** Sum of costs[].amount, kept alongside the breakdown for quick profit math. */
   cost: number;
   selling: number;
   paidToSeller: boolean;
