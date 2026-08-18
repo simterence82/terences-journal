@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Input } from "./Input";
 
 interface AutoCompleteFieldProps {
-  label: string;
+  label?: string;
   options: string[];
   value: string;
   onChange: (value: string) => void;
@@ -29,10 +29,12 @@ export const AutoCompleteField: React.FC<AutoCompleteFieldProps> = ({
 
   return (
     <div className="flex flex-col gap-2" ref={containerRef}>
-      <label className="text-[0.8125rem] font-medium text-foreground">
-        {label}
-        {required && <span className="text-error"> *</span>}
-      </label>
+      {label && (
+        <label className="text-[0.8125rem] font-medium text-foreground">
+          {label}
+          {required && <span className="text-error"> *</span>}
+        </label>
+      )}
       <div className="relative">
         <Input
           value={value}

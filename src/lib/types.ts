@@ -117,6 +117,7 @@ export interface LookupsResponse {
   clientNames: string[];
   addresses: string[];
   commissionRecipients: string[];
+  lightingVendors: string[];
   blumOrderNames: string[];
   taskAssignees: string[];
 }

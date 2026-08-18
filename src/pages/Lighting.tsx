@@ -215,21 +215,22 @@ export const LightingPage: React.FC = () => {
             <div className="flex flex-col gap-2">
               {costRows.map((row, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <Input
-                    placeholder="Vendor (optional)"
-                    value={row.vendor}
-                    onChange={(e) => updateCostRow(setCostRows, i, "vendor", e.target.value)}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={row.amount}
-                    onChange={(e) => updateCostRow(setCostRows, i, "amount", e.target.value)}
-                    className="w-28"
-                  />
+                  <div className="grid flex-1 grid-cols-2 gap-2">
+                    <AutoCompleteField
+                      options={lookupsQuery.data?.lightingVendors ?? []}
+                      value={row.vendor}
+                      onChange={(v) => updateCostRow(setCostRows, i, "vendor", v)}
+                      placeholder="Vendor (optional)"
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={row.amount}
+                      onChange={(e) => updateCostRow(setCostRows, i, "amount", e.target.value)}
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
@@ -290,21 +291,22 @@ export const LightingPage: React.FC = () => {
             <div className="flex flex-col gap-2">
               {editCostRows.map((row, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <Input
-                    placeholder="Vendor (optional)"
-                    value={row.vendor}
-                    onChange={(e) => updateCostRow(setEditCostRows, i, "vendor", e.target.value)}
-                    className="flex-1"
-                  />
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={row.amount}
-                    onChange={(e) => updateCostRow(setEditCostRows, i, "amount", e.target.value)}
-                    className="w-28"
-                  />
+                  <div className="grid flex-1 grid-cols-2 gap-2">
+                    <AutoCompleteField
+                      options={lookupsQuery.data?.lightingVendors ?? []}
+                      value={row.vendor}
+                      onChange={(v) => updateCostRow(setEditCostRows, i, "vendor", v)}
+                      placeholder="Vendor (optional)"
+                    />
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={row.amount}
+                      onChange={(e) => updateCostRow(setEditCostRows, i, "amount", e.target.value)}
+                    />
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"
