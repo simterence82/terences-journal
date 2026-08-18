@@ -19,15 +19,20 @@ export async function uploadToCloudinary(file: File): Promise<CloudinaryUploadRe
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", UPLOAD_PRESET);
-  formData.append("use_filename", "true");
-  formData.append("unique_filename", "true");
 
   const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`, {
     method: "POST",
     body: formData,
   });
   if (!res.ok) {
-    throw new Error("Failed to upload attachment to Cloudinary");
+    const body = await res.text().catch(() => "");
+    let reason = body;
+    try {
+      reason = JSON.parse(body)?.error?.message ?? body;
+    } catch {
+      // body wasn't JSON -- fall back to the raw text above
+    }
+    throw new Error(`Cloudinary upload failed: ${reason || res.statusText}`);
   }
   const data = await res.json();
   return { url: data.secure_url as string, publicId: data.public_id as string };
