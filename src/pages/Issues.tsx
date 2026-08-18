@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Pencil, Paperclip, Eye, Download, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Pencil, Paperclip, Eye, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
   useIssuesList,
@@ -8,7 +8,6 @@ import {
   useDeleteIssue,
   useDeleteIssues,
   useRemoveIssueFile,
-  downloadIssueFile,
   fetchIssueFileBlob,
 } from "../hooks/useIssues";
 import { EmptyState } from "../components/EmptyState";
@@ -253,17 +252,23 @@ export const IssuesPage: React.FC = () => {
             <div key={issue.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow transition-shadow hover:shadow-md ${issue.resolved ? "opacity-65" : ""}`}>
               <div className="flex items-center gap-3">
                 {isAdmin && (
-                  <Checkbox checked={selected.has(issue.id)} onChange={() => toggleSelected(issue.id)} aria-label={`Select ${issue.title}`} />
+                  <label className="flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
+                    <Checkbox checked={selected.has(issue.id)} onChange={() => toggleSelected(issue.id)} aria-label={`Select ${issue.title}`} />
+                    Select
+                  </label>
                 )}
-                <Checkbox checked={issue.resolved} onChange={() => toggleResolved(issue.id, issue.resolved)} aria-label="Mark resolved" />
+                <label className="flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
+                  <Checkbox checked={issue.resolved} onChange={() => toggleResolved(issue.id, issue.resolved)} aria-label="Mark resolved" />
+                  Resolved
+                </label>
                 <span className={`flex-1 text-[0.9375rem] font-semibold text-foreground ${issue.resolved ? "line-through" : ""}`}>{issue.title}</span>
                 <Badge variant={issue.resolved ? "success" : "destructive"}>{issue.resolved ? "Resolved" : "Unresolved"}</Badge>
               </div>
               {issue.description && <p className="text-[0.8125rem] leading-relaxed text-muted-foreground">{issue.description}</p>}
               <div className="flex items-center justify-between border-t border-border pt-2">
                 {issue.fileName ? (
-                  <button type="button" onClick={() => void downloadIssueFile(issue.id, issue.fileName!, issue.fileType, issue.fileUrl)} className="flex items-center gap-1 text-xs text-primary hover:underline">
-                    <Download size={14} /> {issue.fileName}
+                  <button type="button" onClick={() => setPreviewIssue(issue)} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    <Paperclip size={14} /> {issue.fileName}
                   </button>
                 ) : <span />}
                 <div className="flex items-center gap-1">

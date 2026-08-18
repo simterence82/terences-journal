@@ -1,15 +1,18 @@
-import React from "react";
-import { Download, FolderArchive, FileText } from "lucide-react";
+import React, { useState } from "react";
+import { Paperclip, FolderArchive, FileText } from "lucide-react";
 import { useFilesArchiveList } from "../hooks/useFilesArchive";
-import { downloadTaskFile } from "../hooks/useTasks";
-import { downloadIssueFile } from "../hooks/useIssues";
+import { fetchTaskFileBlob } from "../hooks/useTasks";
+import { fetchIssueFileBlob } from "../hooks/useIssues";
 import { Badge } from "../components/Badge";
 import { Skeleton } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
+import { FilePreviewDialog } from "../components/FilePreviewDialog";
+import type { FileArchiveItem } from "../lib/types";
 
 export const FilesArchivePage: React.FC = () => {
   const listQuery = useFilesArchiveList();
   const files = listQuery.data ?? [];
+  const [previewFile, setPreviewFile] = useState<FileArchiveItem | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,14 +59,11 @@ export const FilesArchivePage: React.FC = () => {
                     <td className="border-b border-border px-4 py-3">
                       <button
                         type="button"
-                        onClick={() =>
-                          file.kind === "tasks"
-                            ? downloadTaskFile(file.id, file.fileName, file.fileType, file.fileUrl)
-                            : downloadIssueFile(file.id, file.fileName, file.fileType, file.fileUrl)
-                        }
+                        onClick={() => setPreviewFile(file)}
                         className="flex items-center gap-1 text-primary hover:underline"
+                        aria-label={`Open ${file.fileName}`}
                       >
-                        <Download size={16} />
+                        <Paperclip size={16} />
                       </button>
                     </td>
                   </tr>
@@ -86,20 +86,34 @@ export const FilesArchivePage: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
-                    file.kind === "tasks"
-                      ? downloadTaskFile(file.id, file.fileName, file.fileType, file.fileUrl)
-                      : downloadIssueFile(file.id, file.fileName, file.fileType, file.fileUrl)
-                  }
+                  onClick={() => setPreviewFile(file)}
                   className="shrink-0 text-primary"
-                  aria-label={`Download ${file.fileName}`}
+                  aria-label={`Open ${file.fileName}`}
                 >
-                  <Download size={18} />
+                  <Paperclip size={18} />
                 </button>
               </div>
             ))}
           </div>
         </>
+      )}
+
+      {previewFile && (
+        <FilePreviewDialog
+          open={previewFile !== null}
+          onOpenChange={(open) => !open && setPreviewFile(null)}
+          fileName={previewFile.fileName}
+          fileType={previewFile.fileType}
+          fileUrl={previewFile.fileUrl}
+          loadBlob={
+            previewFile.fileUrl
+              ? undefined
+              : () =>
+                  previewFile.kind === "tasks"
+                    ? fetchTaskFileBlob(previewFile.id, previewFile.fileType)
+                    : fetchIssueFileBlob(previewFile.id, previewFile.fileType)
+          }
+        />
       )}
     </div>
   );

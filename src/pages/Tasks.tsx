@@ -295,9 +295,15 @@ export const TasksPage: React.FC = () => {
             <div key={task.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow transition-shadow hover:shadow-md ${task.done ? "opacity-60" : ""}`}>
               <div className="flex items-center gap-3">
                 {isAdmin && (
-                  <Checkbox checked={selected.has(task.id)} onChange={() => toggleSelected(task.id)} aria-label={`Select ${task.title}`} />
+                  <label className="flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
+                    <Checkbox checked={selected.has(task.id)} onChange={() => toggleSelected(task.id)} aria-label={`Select ${task.title}`} />
+                    Select
+                  </label>
                 )}
-                <Checkbox checked={task.done} onChange={() => toggleDone(task.id, task.done)} aria-label="Mark done" />
+                <label className="flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
+                  <Checkbox checked={task.done} onChange={() => toggleDone(task.id, task.done)} aria-label="Mark done" />
+                  Done
+                </label>
                 <span className={`flex-1 text-[0.9375rem] font-semibold text-foreground ${task.done ? "line-through" : ""}`}>{task.title}</span>
                 <PriorityBadge priority={task.priority} />
               </div>
