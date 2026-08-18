@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   query,
@@ -102,6 +103,41 @@ export const useDeleteIssue = () =>
     },
   });
 
+export const useDeleteIssues = () =>
+  useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() })));
+      return { success: true as const };
+    },
+  });
+
+/** Removes an attachment from an issue without deleting the issue itself. Does not delete the Cloudinary asset. */
+export const useRemoveIssueFile = () =>
+  useMutation({
+    mutationFn: async (id: string) => {
+      await updateDoc(doc(db, COLLECTION, id), {
+        fileName: null,
+        fileType: null,
+        fileUrl: null,
+        filePublicId: null,
+        hasFile: false,
+      });
+      await deleteDoc(doc(db, LEGACY_FILES_COLLECTION, id));
+      return { success: true as const };
+    },
+  });
+
+/** Legacy fallback only -- attachments uploaded before the Cloudinary migration. */
+export async function fetchIssueFileBlob(id: string, fileType: string | null): Promise<Blob> {
+  const snap = await getDoc(doc(db, LEGACY_FILES_COLLECTION, id));
+  if (!snap.exists()) throw new Error("File not found");
+  const { fileData } = snap.data() as { fileData: string };
+  const binary = atob(fileData);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: fileType ?? "application/octet-stream" });
+}
+
 export async function downloadIssueFile(id: string, fileName: string, fileType: string | null, fileUrl?: string | null): Promise<void> {
   if (fileUrl) {
     const a = document.createElement("a");
@@ -112,13 +148,7 @@ export async function downloadIssueFile(id: string, fileName: string, fileType: 
     document.body.removeChild(a);
     return;
   }
-  const snap = await getDoc(doc(db, LEGACY_FILES_COLLECTION, id));
-  if (!snap.exists()) return;
-  const { fileData } = snap.data() as { fileData: string };
-  const binary = atob(fileData);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  const blob = new Blob([bytes], { type: fileType ?? "application/octet-stream" });
+  const blob = await fetchIssueFileBlob(id, fileType);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   query,
@@ -107,6 +108,30 @@ export const useDeleteTask = () =>
   useMutation({
     mutationFn: async (id: string) => {
       await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
+      return { success: true as const };
+    },
+  });
+
+export const useDeleteTasks = () =>
+  useMutation({
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() })));
+      return { success: true as const };
+    },
+  });
+
+/** Removes an attachment from a task without deleting the task itself. Does not delete the Cloudinary asset. */
+export const useRemoveTaskFile = () =>
+  useMutation({
+    mutationFn: async (id: string) => {
+      await updateDoc(doc(db, COLLECTION, id), {
+        fileName: null,
+        fileType: null,
+        fileUrl: null,
+        filePublicId: null,
+        hasFile: false,
+      });
+      await deleteDoc(doc(db, LEGACY_FILES_COLLECTION, id));
       return { success: true as const };
     },
   });

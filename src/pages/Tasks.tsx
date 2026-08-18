@@ -1,7 +1,15 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Pencil, Paperclip, ListChecks } from "lucide-react";
+import { Plus, Trash2, Pencil, Paperclip, Eye, ListChecks } from "lucide-react";
 import { toast } from "sonner";
-import { useTasksList, useCreateTask, useUpdateTask, useDeleteTask, fetchTaskFileBlob } from "../hooks/useTasks";
+import {
+  useTasksList,
+  useCreateTask,
+  useUpdateTask,
+  useDeleteTask,
+  useDeleteTasks,
+  useRemoveTaskFile,
+  fetchTaskFileBlob,
+} from "../hooks/useTasks";
 import { EmptyState } from "../components/EmptyState";
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
@@ -36,6 +44,8 @@ export const TasksPage: React.FC = () => {
   const createMutation = useCreateTask();
   const updateMutation = useUpdateTask();
   const deleteMutation = useDeleteTask();
+  const bulkDeleteMutation = useDeleteTasks();
+  const removeFileMutation = useRemoveTaskFile();
   const deleteTarget = useConfirmDialog<string>();
 
   const [statusTab, setStatusTab] = useState<"open" | "done">("open");
@@ -45,11 +55,34 @@ export const TasksPage: React.FC = () => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const tasks = listQuery.data ?? [];
   const openTasks = tasks.filter((t) => !t.done);
   const doneTasks = tasks.filter((t) => t.done);
   const visibleTasks = statusTab === "open" ? openTasks : doneTasks;
+
+  const toggleSelected = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    try {
+      await bulkDeleteMutation.mutateAsync(ids);
+      toast.success(`${ids.length} task(s) moved to Trash Bin`);
+      setSelected(new Set());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete some tasks");
+      throw err;
+    }
+  };
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -90,6 +123,17 @@ export const TasksPage: React.FC = () => {
     });
   };
 
+  const handleRemoveAttachment = () => {
+    if (!editingTask) return;
+    removeFileMutation.mutate(editingTask.id, {
+      onSuccess: () => {
+        toast.success("Attachment removed");
+        setEditingTask((prev) => (prev ? { ...prev, fileName: null, fileType: null, fileUrl: null } : prev));
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to remove attachment"),
+    });
+  };
+
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingTask) return;
@@ -127,9 +171,16 @@ export const TasksPage: React.FC = () => {
           <h1 className="font-display text-3xl font-semibold text-foreground">Outstanding Tasks</h1>
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">{openTasks.length} open of {tasks.length} total</p>
         </div>
-        <Button onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Add Task
-        </Button>
+        <div className="flex items-center gap-2">
+          {isAdmin && selected.size > 0 && (
+            <Button variant="destructive" onClick={() => setIsBulkDeleteOpen(true)}>
+              <Trash2 size={16} /> Delete Selected ({selected.size})
+            </Button>
+          )}
+          <Button onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Add Task
+          </Button>
+        </div>
       </div>
 
       <Tabs
@@ -208,6 +259,22 @@ export const TasksPage: React.FC = () => {
             </div>
           </div>
           <AutoCompleteField label="Assigned To" options={lookupsQuery.data?.taskAssignees ?? []} value={editForm.assignedTo} onChange={(v) => setEditForm((p) => ({ ...p, assignedTo: v }))} />
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Attachment</label>
+            {editingTask?.fileName ? (
+              <div className="flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground">
+                <Paperclip size={14} className="shrink-0" /> <span className="flex-1 truncate">{editingTask.fileName}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => editingTask && setPreviewTask(editingTask)}>
+                  <Eye size={14} /> View
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={handleRemoveAttachment} disabled={removeFileMutation.isPending}>
+                  {removeFileMutation.isPending ? "Removing..." : "Remove"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-[0.8125rem] text-muted-foreground">No attachment.</p>
+            )}
+          </div>
           <DialogFooter>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
@@ -227,6 +294,9 @@ export const TasksPage: React.FC = () => {
           {visibleTasks.map((task) => (
             <div key={task.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow transition-shadow hover:shadow-md ${task.done ? "opacity-60" : ""}`}>
               <div className="flex items-center gap-3">
+                {isAdmin && (
+                  <Checkbox checked={selected.has(task.id)} onChange={() => toggleSelected(task.id)} aria-label={`Select ${task.title}`} />
+                )}
                 <Checkbox checked={task.done} onChange={() => toggleDone(task.id, task.done)} aria-label="Mark done" />
                 <span className={`flex-1 text-[0.9375rem] font-semibold text-foreground ${task.done ? "line-through" : ""}`}>{task.title}</span>
                 <PriorityBadge priority={task.priority} />
@@ -264,6 +334,14 @@ export const TasksPage: React.FC = () => {
         title="Delete this task?"
         description="This will move the task to the Trash Bin, where it can be restored within 120 days before being permanently removed."
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={isBulkDeleteOpen}
+        onOpenChange={setIsBulkDeleteOpen}
+        title={`Delete ${selected.size} task(s)?`}
+        description="These tasks will be moved to the Trash Bin, where they can be restored within 120 days before being permanently removed."
+        onConfirm={handleBulkDelete}
       />
 
       {previewTask && (

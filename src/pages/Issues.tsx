@@ -1,7 +1,16 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Pencil, Paperclip, Download, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Pencil, Paperclip, Eye, Download, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { useIssuesList, useCreateIssue, useUpdateIssue, useDeleteIssue, downloadIssueFile } from "../hooks/useIssues";
+import {
+  useIssuesList,
+  useCreateIssue,
+  useUpdateIssue,
+  useDeleteIssue,
+  useDeleteIssues,
+  useRemoveIssueFile,
+  downloadIssueFile,
+  fetchIssueFileBlob,
+} from "../hooks/useIssues";
 import { EmptyState } from "../components/EmptyState";
 import { useAuth } from "../lib/AuthContext";
 import { Badge } from "../components/Badge";
@@ -13,6 +22,7 @@ import { FileDropzone } from "../components/FileDropzone";
 import { Tabs } from "../components/Tabs";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
+import { FilePreviewDialog } from "../components/FilePreviewDialog";
 import { Skeleton } from "../components/Skeleton";
 import type { Issue } from "../lib/types";
 
@@ -27,6 +37,8 @@ export const IssuesPage: React.FC = () => {
   const createMutation = useCreateIssue();
   const updateMutation = useUpdateIssue();
   const deleteMutation = useDeleteIssue();
+  const bulkDeleteMutation = useDeleteIssues();
+  const removeFileMutation = useRemoveIssueFile();
   const deleteTarget = useConfirmDialog<string>();
 
   const [statusTab, setStatusTab] = useState<"unresolved" | "resolved">("unresolved");
@@ -35,11 +47,35 @@ export const IssuesPage: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [previewIssue, setPreviewIssue] = useState<Issue | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
   const issues = listQuery.data ?? [];
   const unresolvedIssues = issues.filter((i) => !i.resolved);
   const resolvedIssues = issues.filter((i) => i.resolved);
   const visibleIssues = statusTab === "unresolved" ? unresolvedIssues : resolvedIssues;
+
+  const toggleSelected = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selected);
+    try {
+      await bulkDeleteMutation.mutateAsync(ids);
+      toast.success(`${ids.length} issue(s) moved to Trash Bin`);
+      setSelected(new Set());
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete some issues");
+      throw err;
+    }
+  };
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
@@ -74,6 +110,17 @@ export const IssuesPage: React.FC = () => {
     setEditForm({ title: issue.title, description: issue.description ?? "" });
   };
 
+  const handleRemoveAttachment = () => {
+    if (!editingIssue) return;
+    removeFileMutation.mutate(editingIssue.id, {
+      onSuccess: () => {
+        toast.success("Attachment removed");
+        setEditingIssue((prev) => (prev ? { ...prev, fileName: null, fileType: null, fileUrl: null } : prev));
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to remove attachment"),
+    });
+  };
+
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingIssue) return;
@@ -104,9 +151,16 @@ export const IssuesPage: React.FC = () => {
           <h1 className="font-display text-3xl font-semibold text-foreground">Outstanding Issues</h1>
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">{unresolvedIssues.length} unresolved of {issues.length} total</p>
         </div>
-        <Button onClick={() => setIsAddOpen(true)}>
-          <Plus size={16} /> Log Issue
-        </Button>
+        <div className="flex items-center gap-2">
+          {isAdmin && selected.size > 0 && (
+            <Button variant="destructive" onClick={() => setIsBulkDeleteOpen(true)}>
+              <Trash2 size={16} /> Delete Selected ({selected.size})
+            </Button>
+          )}
+          <Button onClick={() => setIsAddOpen(true)}>
+            <Plus size={16} /> Log Issue
+          </Button>
+        </div>
       </div>
 
       <Tabs
@@ -163,6 +217,22 @@ export const IssuesPage: React.FC = () => {
             <label className="text-[0.8125rem] font-medium text-foreground">Description</label>
             <Textarea value={editForm.description} onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))} rows={4} />
           </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Attachment</label>
+            {editingIssue?.fileName ? (
+              <div className="flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground">
+                <Paperclip size={14} className="shrink-0" /> <span className="flex-1 truncate">{editingIssue.fileName}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => editingIssue && setPreviewIssue(editingIssue)}>
+                  <Eye size={14} /> View
+                </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={handleRemoveAttachment} disabled={removeFileMutation.isPending}>
+                  {removeFileMutation.isPending ? "Removing..." : "Remove"}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-[0.8125rem] text-muted-foreground">No attachment.</p>
+            )}
+          </div>
           <DialogFooter>
             <Button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
@@ -182,6 +252,9 @@ export const IssuesPage: React.FC = () => {
           {visibleIssues.map((issue) => (
             <div key={issue.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow transition-shadow hover:shadow-md ${issue.resolved ? "opacity-65" : ""}`}>
               <div className="flex items-center gap-3">
+                {isAdmin && (
+                  <Checkbox checked={selected.has(issue.id)} onChange={() => toggleSelected(issue.id)} aria-label={`Select ${issue.title}`} />
+                )}
                 <Checkbox checked={issue.resolved} onChange={() => toggleResolved(issue.id, issue.resolved)} aria-label="Mark resolved" />
                 <span className={`flex-1 text-[0.9375rem] font-semibold text-foreground ${issue.resolved ? "line-through" : ""}`}>{issue.title}</span>
                 <Badge variant={issue.resolved ? "success" : "destructive"}>{issue.resolved ? "Resolved" : "Unresolved"}</Badge>
@@ -216,6 +289,25 @@ export const IssuesPage: React.FC = () => {
         description="This will move the issue to the Trash Bin, where it can be restored within 120 days before being permanently removed."
         onConfirm={handleDelete}
       />
+
+      <ConfirmDialog
+        open={isBulkDeleteOpen}
+        onOpenChange={setIsBulkDeleteOpen}
+        title={`Delete ${selected.size} issue(s)?`}
+        description="These issues will be moved to the Trash Bin, where they can be restored within 120 days before being permanently removed."
+        onConfirm={handleBulkDelete}
+      />
+
+      {previewIssue && (
+        <FilePreviewDialog
+          open={previewIssue !== null}
+          onOpenChange={(open) => !open && setPreviewIssue(null)}
+          fileName={previewIssue.fileName!}
+          fileType={previewIssue.fileType}
+          fileUrl={previewIssue.fileUrl}
+          loadBlob={previewIssue.fileUrl ? undefined : () => fetchIssueFileBlob(previewIssue.id, previewIssue.fileType)}
+        />
+      )}
     </div>
   );
 };
