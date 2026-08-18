@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Trash2 } from "lucide-react";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "./Dialog";
 import { Button } from "./Button";
 import { cloudinaryDownloadUrl } from "../lib/cloudinary";
@@ -13,9 +13,21 @@ interface FilePreviewDialogProps {
   fileUrl?: string | null;
   /** Legacy fallback for base64 attachments predating the Cloudinary migration. */
   loadBlob?: () => Promise<Blob>;
+  /** When provided, shows a destructive delete action in the footer. */
+  onDelete?: () => void;
+  deleteLabel?: string;
 }
 
-export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOpenChange, fileName, fileType, fileUrl, loadBlob }) => {
+export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({
+  open,
+  onOpenChange,
+  fileName,
+  fileType,
+  fileUrl,
+  loadBlob,
+  onDelete,
+  deleteLabel = "Delete Permanently",
+}) => {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -77,6 +89,11 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({ open, onOp
         <Button variant="outline" onClick={() => onOpenChange(false)}>
           Close
         </Button>
+        {onDelete && (
+          <Button variant="destructive" onClick={onDelete}>
+            <Trash2 size={16} /> {deleteLabel}
+          </Button>
+        )}
         <Button onClick={handleDownload} disabled={!displayUrl}>
           <Download size={16} /> Download
         </Button>
