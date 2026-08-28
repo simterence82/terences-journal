@@ -308,7 +308,7 @@ export const IssuesPage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this issue?"
-        description="This will move the issue to the Trash Bin, where it can be restored within 120 days before being permanently removed."
+        description="This will move the issue to the Trash Bin, where it can be restored within 60 days before being permanently removed."
         onConfirm={handleDelete}
       />
 
@@ -316,7 +316,7 @@ export const IssuesPage: React.FC = () => {
         open={isBulkDeleteOpen}
         onOpenChange={setIsBulkDeleteOpen}
         title={`Delete ${selected.size} issue(s)?`}
-        description="These issues will be moved to the Trash Bin, where they can be restored within 120 days before being permanently removed."
+        description="These issues will be moved to the Trash Bin, where they can be restored within 60 days before being permanently removed."
         onConfirm={handleBulkDelete}
       />
 

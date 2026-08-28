@@ -32,7 +32,7 @@ daily maintenance job.
   place.
 - **Trash Bin** — every delete moves the record to the Trash Bin instead of
   erasing it; restore any time, or it's permanently purged automatically
-  after 120 days (via a scheduled GitHub Actions job — see below). All
+  after 60 days (via a scheduled GitHub Actions job — see below). All
   delete actions require confirmation first.
 - **User Management** (admin only) — anyone can request access (self
   sign-up); an admin approves each request and assigns admin/member, or
@@ -75,7 +75,7 @@ database file.
   `createdBy` field stores the Firebase UID of whoever created it. Deleting
   a record sets `isDeleted: true` (the Trash Bin) rather than removing the
   document; a scheduled GitHub Actions job permanently purges anything
-  soft-deleted for more than 120 days.
+  soft-deleted for more than 60 days.
 - **File attachments** (task files, issue PDFs/images) are uploaded
   directly from the browser to **Cloudinary** (a free-tier media host) and
   only the resulting URL is stored on the task/issue's Firestore document —
@@ -204,7 +204,7 @@ to match.
 ## Trash auto-purge
 
 `.github/workflows/purge-trash.yml` runs `scripts/purgeExpiredTrash.ts`
-once a day, permanently deleting anything soft-deleted more than 120 days
+once a day, permanently deleting anything soft-deleted more than 60 days
 ago (and its attachment doc, if any). It needs the `FIREBASE_SERVICE_ACCOUNT`
 secret set up in the deploy section above. You can also trigger it manually
 from the repo's **Actions** tab (`workflow_dispatch`), or run it locally

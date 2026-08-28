@@ -282,7 +282,7 @@ export const BlumPage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this order?"
-        description="This will move the order to the Trash Bin, where it can be restored within 120 days before being permanently removed."
+        description="This will move the order to the Trash Bin, where it can be restored within 60 days before being permanently removed."
         onConfirm={handleDelete}
       />
     </div>

@@ -2,10 +2,13 @@ import React, { useState } from "react";
 import { Trash2, RotateCcw, Paperclip, Trash } from "lucide-react";
 import { toast } from "sonner";
 import { useTrashList, useRestoreTrashItem, usePermanentDeleteTrashItem } from "../hooks/useTrash";
+import { fetchTaskFileBlob } from "../hooks/useTasks";
+import { fetchIssueFileBlob } from "../hooks/useIssues";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Checkbox } from "../components/Checkbox";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { FilePreviewDialog } from "../components/FilePreviewDialog";
 import { Skeleton } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
 import type { TrashItem } from "../lib/types";
@@ -30,6 +33,7 @@ export const TrashPage: React.FC = () => {
   const restoreMutation = useRestoreTrashItem();
   const permanentDeleteMutation = usePermanentDeleteTrashItem();
   const [permanentTarget, setPermanentTarget] = useState<TrashItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<TrashItem | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
@@ -92,7 +96,7 @@ export const TrashPage: React.FC = () => {
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">Trash Bin</h1>
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">
-            Deleted entries are kept here for 120 days before being permanently removed automatically.
+            Deleted entries are kept here for 60 days before being permanently removed automatically.
           </p>
         </div>
         {selected.size > 0 && (
@@ -136,13 +140,24 @@ export const TrashPage: React.FC = () => {
                       <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
                     </td>
                     <td className="border-b border-border px-4 py-3 text-foreground">
-                      <div className="flex items-center gap-2">
-                        {item.hasFile && <Paperclip size={14} className="text-muted-foreground" />}
+                      {item.hasFile ? (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewItem(item)}
+                          className="flex items-center gap-2 text-left"
+                        >
+                          <Paperclip size={14} className="shrink-0 text-muted-foreground" />
+                          <div className="flex flex-col">
+                            <span className="font-medium text-primary hover:underline">{item.title}</span>
+                            <span className="text-xs text-muted-foreground">{item.subtitle}</span>
+                          </div>
+                        </button>
+                      ) : (
                         <div className="flex flex-col">
                           <span className="font-medium">{item.title}</span>
                           <span className="text-xs text-muted-foreground">{item.subtitle}</span>
                         </div>
-                      </div>
+                      )}
                     </td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{new Date(item.deletedAt).toLocaleDateString("en-SG")}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{daysUntil(item.purgeAt)} days</td>
@@ -171,10 +186,18 @@ export const TrashPage: React.FC = () => {
                 <div className="flex items-start gap-3">
                   <Checkbox checked={selected.has(itemKey(item))} onChange={() => toggleSelected(item)} aria-label={`Select ${item.title}`} className="mt-1" />
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="flex items-center gap-2">
-                      {item.hasFile && <Paperclip size={14} className="shrink-0 text-muted-foreground" />}
+                    {item.hasFile ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewItem(item)}
+                        className="flex items-center gap-2 text-left"
+                      >
+                        <Paperclip size={14} className="shrink-0 text-muted-foreground" />
+                        <span className="truncate font-medium text-primary hover:underline">{item.title}</span>
+                      </button>
+                    ) : (
                       <span className="truncate font-medium text-foreground">{item.title}</span>
-                    </div>
+                    )}
                     <span className="text-xs text-muted-foreground">{item.subtitle}</span>
                     <div className="mt-1">
                       <Badge variant="outline">{KIND_LABEL[item.kind]}</Badge>
@@ -198,6 +221,30 @@ export const TrashPage: React.FC = () => {
             ))}
           </div>
         </>
+      )}
+
+      {previewItem && (
+        <FilePreviewDialog
+          open={previewItem !== null}
+          onOpenChange={(open) => !open && setPreviewItem(null)}
+          fileName={previewItem.fileName ?? ""}
+          fileType={previewItem.fileType}
+          fileUrl={previewItem.fileUrl}
+          loadBlob={
+            previewItem.fileUrl
+              ? undefined
+              : () =>
+                  previewItem.kind === "tasks"
+                    ? fetchTaskFileBlob(previewItem.id, previewItem.fileType)
+                    : fetchIssueFileBlob(previewItem.id, previewItem.fileType)
+          }
+          onExtraAction={() => {
+            handleRestore(previewItem);
+            setPreviewItem(null);
+          }}
+          extraActionLabel="Restore"
+          extraActionIcon={<RotateCcw size={16} />}
+        />
       )}
 
       <ConfirmDialog

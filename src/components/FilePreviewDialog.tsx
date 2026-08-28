@@ -16,6 +16,10 @@ interface FilePreviewDialogProps {
   /** When provided, shows a destructive delete action in the footer. */
   onDelete?: () => void;
   deleteLabel?: string;
+  /** When provided, shows an extra non-destructive action (e.g. Restore) in the footer. */
+  onExtraAction?: () => void;
+  extraActionLabel?: string;
+  extraActionIcon?: React.ReactNode;
 }
 
 export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({
@@ -27,6 +31,9 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({
   loadBlob,
   onDelete,
   deleteLabel = "Delete Permanently",
+  onExtraAction,
+  extraActionLabel,
+  extraActionIcon,
 }) => {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +96,11 @@ export const FilePreviewDialog: React.FC<FilePreviewDialogProps> = ({
         <Button variant="outline" onClick={() => onOpenChange(false)}>
           Close
         </Button>
+        {onExtraAction && (
+          <Button variant="secondary" onClick={onExtraAction}>
+            {extraActionIcon} {extraActionLabel}
+          </Button>
+        )}
         {onDelete && (
           <Button variant="destructive" onClick={onDelete}>
             <Trash2 size={16} /> {deleteLabel}

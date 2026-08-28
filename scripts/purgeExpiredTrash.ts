@@ -4,14 +4,14 @@ import { getFirestore, Timestamp, type WriteBatch } from "firebase-admin/firesto
 
 // Standalone script (no long-running server anymore) -- run on a schedule by
 // .github/workflows/purge-trash.yml. Permanently removes anything that has
-// sat in the Trash Bin for more than 120 days.
+// sat in the Trash Bin for more than 60 days.
 
 const keyPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || "firebase-service-account.json";
 const serviceAccount = JSON.parse(readFileSync(keyPath, "utf-8"));
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
 
-const RETENTION_DAYS = 120;
+const RETENTION_DAYS = 60;
 const COLLECTIONS = ["lightingPurchases", "blumPurchases", "tasks", "issues", "scheduleEvents"];
 const FILE_COLLECTION_BY_KIND: Record<string, string> = { tasks: "taskFiles", issues: "issueFiles" };
 

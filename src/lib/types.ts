@@ -103,6 +103,9 @@ export interface TrashItem {
   title: string;
   subtitle: string;
   hasFile: boolean;
+  fileName: string | null;
+  fileType: string | null;
+  fileUrl: string | null;
   deletedAt: string;
   purgeAt: string;
 }

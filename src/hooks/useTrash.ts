@@ -13,23 +13,46 @@ const COLLECTION_BY_KIND: Record<TrashKind, string> = {
   schedule: "scheduleEvents",
 };
 
-// Soft-deleted docs are purged 120 days after deletion.
-const RETENTION_MS = 120 * 24 * 60 * 60 * 1000;
+// Soft-deleted docs are purged 60 days after deletion.
+const RETENTION_MS = 60 * 24 * 60 * 60 * 1000;
 
 function buildItem(kind: TrashKind, id: string, data: Record<string, any>): TrashItem {
   const deletedAt = toIso(data.deletedAt);
   const purgeAt = new Date(new Date(deletedAt).getTime() + RETENTION_MS).toISOString();
+  const noFile = { hasFile: false, fileName: null, fileType: null, fileUrl: null };
   switch (kind) {
     case "lighting":
-      return { kind, id, title: `${data.brand} - ${data.clientName}`, subtitle: "Smart Lighting Purchase", hasFile: false, deletedAt, purgeAt };
+      return { kind, id, title: `${data.brand} - ${data.clientName}`, subtitle: "Smart Lighting Purchase", ...noFile, deletedAt, purgeAt };
     case "blum":
-      return { kind, id, title: data.orderName, subtitle: "Blum Purchase", hasFile: false, deletedAt, purgeAt };
+      return { kind, id, title: data.orderName, subtitle: "Blum Purchase", ...noFile, deletedAt, purgeAt };
     case "tasks":
-      return { kind, id, title: data.title, subtitle: "Outstanding Task", hasFile: !!data.hasFile, deletedAt, purgeAt };
+      return {
+        kind,
+        id,
+        title: data.title,
+        subtitle: "Outstanding Task",
+        hasFile: !!data.hasFile,
+        fileName: data.fileName ?? null,
+        fileType: data.fileType ?? null,
+        fileUrl: data.fileUrl ?? null,
+        deletedAt,
+        purgeAt,
+      };
     case "issues":
-      return { kind, id, title: data.title, subtitle: "Outstanding Issue", hasFile: !!data.hasFile, deletedAt, purgeAt };
+      return {
+        kind,
+        id,
+        title: data.title,
+        subtitle: "Outstanding Issue",
+        hasFile: !!data.hasFile,
+        fileName: data.fileName ?? null,
+        fileType: data.fileType ?? null,
+        fileUrl: data.fileUrl ?? null,
+        deletedAt,
+        purgeAt,
+      };
     case "schedule":
-      return { kind, id, title: data.title, subtitle: `Schedule - ${data.date}`, hasFile: false, deletedAt, purgeAt };
+      return { kind, id, title: data.title, subtitle: `Schedule - ${data.date}`, ...noFile, deletedAt, purgeAt };
   }
 }
 

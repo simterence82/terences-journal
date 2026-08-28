@@ -355,7 +355,7 @@ export const TasksPage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this task?"
-        description="This will move the task to the Trash Bin, where it can be restored within 120 days before being permanently removed."
+        description="This will move the task to the Trash Bin, where it can be restored within 60 days before being permanently removed."
         onConfirm={handleDelete}
       />
 
@@ -363,7 +363,7 @@ export const TasksPage: React.FC = () => {
         open={isBulkDeleteOpen}
         onOpenChange={setIsBulkDeleteOpen}
         title={`Delete ${selected.size} task(s)?`}
-        description="These tasks will be moved to the Trash Bin, where they can be restored within 120 days before being permanently removed."
+        description="These tasks will be moved to the Trash Bin, where they can be restored within 60 days before being permanently removed."
         onConfirm={handleBulkDelete}
       />
 
