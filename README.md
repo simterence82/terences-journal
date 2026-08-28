@@ -57,6 +57,7 @@ daily maintenance job.
 | Hosting | GitHub Pages, built and deployed by GitHub Actions |
 | Trash auto-purge | A small script (`scripts/purgeExpiredTrash.ts`, Firebase Admin SDK) run on a daily GitHub Actions schedule |
 | Deleted-user cleanup | A small script (`scripts/cleanupDeletedUsers.ts`, Firebase Admin SDK) run on a GitHub Actions schedule every 10 minutes |
+| Orphaned Cloudinary file cleanup | A small script (`scripts/cleanupOrphanedCloudinaryFiles.ts`, Firebase Admin SDK + Cloudinary Admin API) run on a daily GitHub Actions schedule |
 
 ## Where your data lives
 
@@ -190,6 +191,12 @@ required.
      of `firebase-service-account.json` from step 1.5 (this one **is**
      sensitive — it's only used by the scheduled purge and deleted-user-
      cleanup workflows, never shipped to the browser).
+   - Also under **Secrets**, add `CLOUDINARY_API_KEY` and
+     `CLOUDINARY_API_SECRET` — from your Cloudinary Dashboard's **Settings
+     → API Keys** (or the Dashboard home page). Unlike the cloud
+     name/upload preset above, these **are** sensitive — they're only used
+     by the scheduled orphaned-file-cleanup workflow (see below), never
+     shipped to the browser.
 3. Push to `master` (which `.github/workflows/deploy.yml` watches) — this
    builds the app and publishes `dist/` to Pages automatically. You'll get
    a URL like `https://<your-github-username>.github.io/terences-journal/`.
@@ -223,6 +230,27 @@ account. Once that runs, the email address is free for someone else (or the
 same person) to sign up with again. You can also trigger it manually from
 the repo's **Actions** tab, or run it locally with `npm run cleanup-users`.
 
+## Orphaned Cloudinary file cleanup
+
+Removing an attachment, or permanently deleting a task/issue that has one,
+only clears the Firestore record — the browser has no Cloudinary API secret
+to delete the underlying file with (deleting requires a signed request,
+which would mean shipping that secret to every visitor). So the file is
+left behind in Cloudinary, unreferenced.
+
+`.github/workflows/cleanup-orphaned-files.yml` runs
+`scripts/cleanupOrphanedCloudinaryFiles.ts` once a day: it reads every
+`filePublicId` currently referenced by a task or issue (including ones
+still sitting in the Trash Bin, so a restorable attachment is never
+touched), lists every file actually in your Cloudinary account, and
+deletes whatever isn't referenced anywhere — skipping anything uploaded in
+the last 24 hours as a safety margin. It needs the `FIREBASE_SERVICE_ACCOUNT`,
+`CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` secrets set up in the
+deploy section above. You can also trigger it manually from the repo's
+**Actions** tab, or run it locally with `npm run cleanup-cloudinary` (needs
+`firebase-service-account.json` present, plus `CLOUDINARY_CLOUD_NAME`,
+`CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in your environment).
+
 ## Roles
 
 - **Admin** — full access: create/update/delete records, approve/deny/
@@ -243,12 +271,10 @@ the repo's **Actions** tab, or run it locally with `npm run cleanup-users`.
 - Firebase's own backup tooling (scheduled Firestore exports) covers this
   app's data — there's no local database file to back up separately.
 - Deleting a task/issue (even permanently, from the Trash Bin) does not
-  delete its Cloudinary asset — only the Firestore record pointing to it.
-  Orphaned files accumulate against Cloudinary's free-tier storage quota
-  over time; a cleanup script (mirroring `cleanupDeletedUsers.ts`'s
-  pattern) would be a reasonable future addition if that becomes a
-  problem, but at personal-operations scale the free tier has a lot of
-  headroom.
+  itself delete its Cloudinary asset — only the Firestore record pointing
+  to it. The daily `cleanup-orphaned-files.yml` job (see above) reconciles
+  this automatically, so leftover files don't accumulate against
+  Cloudinary's free-tier storage quota.
 - GitHub Pages serves everything over HTTPS with client-side routing only
   (`HashRouter` — URLs look like `/#/tasks`), since there's no server to
   rewrite deep-link requests back to `index.html`.
