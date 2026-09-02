@@ -17,6 +17,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/D
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 import { Tabs } from "../components/Tabs";
+import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
 import type { BlumPurchase } from "../lib/types";
 
 const EMPTY_FORM = { orderName: "", amount: "", date: todayISODate(), notes: "" };
@@ -38,6 +39,7 @@ export const BlumPage: React.FC = () => {
   const [editingEntry, setEditingEntry] = useState<BlumPurchase | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [statusTab, setStatusTab] = useState<"outstanding" | "completed">("outstanding");
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   const entries = listQuery.data ?? [];
   const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
@@ -182,7 +184,9 @@ export const BlumPage: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Total Orders" value={entries.length} icon={<Package size={18} />} />
-        <SummaryCard label="Total Amount" value={formatSGD(totalAmount)} icon={<DollarSign size={18} />} />
+        <button type="button" onClick={() => setIsSummaryOpen(true)} className="block w-full text-left">
+          <SummaryCard label="Total Amount" value={formatSGD(totalAmount)} sublabel="View summary report" icon={<DollarSign size={18} />} />
+        </button>
         <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
         <SummaryCard label="Pending Claims" value={pendingClaims} icon={<RotateCcw size={18} />} />
       </div>
@@ -307,6 +311,29 @@ export const BlumPage: React.FC = () => {
         title="Delete this order?"
         description="This will move the order to the Trash Bin, where it can be restored within 60 days before being permanently removed."
         onConfirm={handleDelete}
+      />
+
+      <SummaryReportDialog
+        open={isSummaryOpen}
+        onOpenChange={setIsSummaryOpen}
+        title="Blum Purchases Summary"
+        entries={entries}
+        getDate={(e) => e.date}
+        renderStats={(filtered) => {
+          const amount = filtered.reduce((sum, e) => sum + e.amount, 0);
+          const paid = filtered.filter((e) => e.paidToSeller).length;
+          const claimed = filtered.filter((e) => e.reimbursed).length;
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <StatRow label="Total Orders" value={filtered.length} />
+              <StatRow label="Total Amount" value={formatSGD(amount)} />
+              <StatRow label="Paid" value={`${paid} / ${filtered.length}`} />
+              <StatRow label="Pending Payment" value={filtered.length - paid} />
+              <StatRow label="Claimed" value={`${claimed} / ${filtered.length}`} />
+              <StatRow label="Pending Claims" value={filtered.length - claimed} />
+            </div>
+          );
+        }}
       />
     </div>
   );

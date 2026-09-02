@@ -16,6 +16,7 @@ import { Checkbox } from "../components/Checkbox";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
 import type { LightingCostItem, LightingPurchase } from "../lib/types";
 
 const EMPTY_FORM = {
@@ -68,6 +69,7 @@ export const LightingPage: React.FC = () => {
   const [editingEntry, setEditingEntry] = useState<LightingPurchase | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [editCostRows, setEditCostRows] = useState<CostRow[]>([{ ...EMPTY_COST_ROW }]);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   const entries = listQuery.data ?? [];
   const totalProfit = entries.reduce((sum, e) => sum + (e.selling - e.cost), 0);
@@ -341,7 +343,9 @@ export const LightingPage: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Total Entries" value={entries.length} icon={<Lightbulb size={18} />} />
-        <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} icon={<DollarSign size={18} />} />
+        <button type="button" onClick={() => setIsSummaryOpen(true)} className="block w-full text-left">
+          <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} sublabel="View summary report" icon={<DollarSign size={18} />} />
+        </button>
         <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
         <SummaryCard label="Pending Claims" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
       </div>
@@ -469,6 +473,34 @@ export const LightingPage: React.FC = () => {
         title="Delete this entry?"
         description="This will move the entry to the Trash Bin, where it can be restored within 60 days before being permanently removed."
         onConfirm={handleDelete}
+      />
+
+      <SummaryReportDialog
+        open={isSummaryOpen}
+        onOpenChange={setIsSummaryOpen}
+        title="Smart Lighting Summary"
+        entries={entries}
+        getDate={(e) => e.date}
+        renderStats={(filtered) => {
+          const cost = filtered.reduce((sum, e) => sum + e.cost, 0);
+          const selling = filtered.reduce((sum, e) => sum + e.selling, 0);
+          const commission = filtered.reduce((sum, e) => sum + e.commissionGiven, 0);
+          const paid = filtered.filter((e) => e.paidToSeller).length;
+          const claimed = filtered.filter((e) => e.reimbursed).length;
+          return (
+            <div className="grid grid-cols-2 gap-2">
+              <StatRow label="Total Entries" value={filtered.length} />
+              <StatRow label="Total Profit" value={formatSGD(selling - cost)} />
+              <StatRow label="Total Cost" value={formatSGD(cost)} />
+              <StatRow label="Total Selling" value={formatSGD(selling)} />
+              <StatRow label="Total Commission" value={formatSGD(commission)} />
+              <StatRow label="Paid" value={`${paid} / ${filtered.length}`} />
+              <StatRow label="Pending Payment" value={filtered.length - paid} />
+              <StatRow label="Claimed" value={`${claimed} / ${filtered.length}`} />
+              <StatRow label="Pending Claims" value={filtered.length - claimed} />
+            </div>
+          );
+        }}
       />
     </div>
   );
