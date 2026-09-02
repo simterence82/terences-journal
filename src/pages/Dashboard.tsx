@@ -158,7 +158,7 @@ export const DashboardPage: React.FC = () => {
         {isAdmin && (
           <Link to="/lighting" className="block">
             <SummaryCard
-              label="Outstanding Orders"
+              label="Smart Lighting Outstanding Claims"
               value={lightingQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : outstandingLightingOrders.length}
               sublabel={`${(lightingQuery.data ?? []).length} total`}
               icon={<Lightbulb size={18} />}
@@ -168,7 +168,7 @@ export const DashboardPage: React.FC = () => {
         )}
         <Link to="/blum" className="block">
           <SummaryCard
-            label="Outstanding Claims"
+            label="Blum Outstanding Claims"
             value={blumQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : outstandingBlumClaims.length}
             sublabel={`${(blumQuery.data ?? []).length} orders`}
             icon={<Package size={18} />}
