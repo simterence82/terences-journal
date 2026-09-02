@@ -21,7 +21,7 @@ import { useBlumList } from "../hooks/useBlum";
 import { useScheduleList } from "../hooks/useSchedule";
 import { useAuth } from "../lib/AuthContext";
 import { getChineseLunarDateLabel } from "../lib/lunarCalendar";
-import { formatSGD } from "../lib/formatCurrency";
+import { todayISODate } from "../lib/date";
 import { SAMPLE_WEATHER, SAMPLE_HEADLINES } from "../lib/sampleWeatherNews";
 import { SummaryCard } from "../components/SummaryCard";
 import { PriorityBadge } from "../components/PriorityBadge";
@@ -36,11 +36,6 @@ const CONDITION_ICON: Record<string, React.ReactNode> = {
   Showers: <CloudRain size={20} />,
   Thunderstorms: <CloudRain size={20} />,
 };
-
-function todayISODate(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 export const DashboardPage: React.FC = () => {
   const { authState } = useAuth();
@@ -68,8 +63,8 @@ export const DashboardPage: React.FC = () => {
 
   const openTasks = (tasksQuery.data ?? []).filter((t) => !t.done);
   const unresolvedIssues = (issuesQuery.data ?? []).filter((i) => !i.resolved);
-  const totalLightingProfit = (lightingQuery.data ?? []).reduce((sum, e) => sum + (e.selling - e.cost), 0);
-  const totalBlumAmount = (blumQuery.data ?? []).reduce((sum, e) => sum + e.amount, 0);
+  const outstandingLightingOrders = (lightingQuery.data ?? []).filter((e) => !e.reimbursed);
+  const outstandingBlumClaims = (blumQuery.data ?? []).filter((e) => !e.reimbursed);
   const todaysSchedule = (scheduleQuery.data ?? []).filter((s) => s.date === today);
 
   const topTasks = [...openTasks]
@@ -161,21 +156,25 @@ export const DashboardPage: React.FC = () => {
           />
         </Link>
         {isAdmin && (
-          <SummaryCard
-            label="Lighting Profit"
-            value={lightingQuery.isLoading ? <Skeleton style={{ width: 80, height: 32 }} /> : formatSGD(totalLightingProfit)}
-            sublabel={`${(lightingQuery.data ?? []).length} entries`}
-            icon={<Lightbulb size={18} />}
-            tone="warning"
-          />
+          <Link to="/lighting" className="block">
+            <SummaryCard
+              label="Outstanding Orders"
+              value={lightingQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : outstandingLightingOrders.length}
+              sublabel={`${(lightingQuery.data ?? []).length} total`}
+              icon={<Lightbulb size={18} />}
+              tone="warning"
+            />
+          </Link>
         )}
-        <SummaryCard
-          label="Blum Total"
-          value={blumQuery.isLoading ? <Skeleton style={{ width: 80, height: 32 }} /> : formatSGD(totalBlumAmount)}
-          sublabel={`${(blumQuery.data ?? []).length} orders`}
-          icon={<Package size={18} />}
-          tone="secondary"
-        />
+        <Link to="/blum" className="block">
+          <SummaryCard
+            label="Outstanding Claims"
+            value={blumQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : outstandingBlumClaims.length}
+            sublabel={`${(blumQuery.data ?? []).length} orders`}
+            icon={<Package size={18} />}
+            tone="secondary"
+          />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_1fr]">

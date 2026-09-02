@@ -6,6 +6,7 @@ import { useBlumList, useCreateBlum, useUpdateBlum, useDeleteBlum } from "../hoo
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
 import { formatSGD } from "../lib/formatCurrency";
+import { todayISODate } from "../lib/date";
 import { SummaryCard } from "../components/SummaryCard";
 import { AutoCompleteField } from "../components/AutoCompleteField";
 import { Button } from "../components/Button";
@@ -15,10 +16,11 @@ import { Checkbox } from "../components/Checkbox";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import { Tabs } from "../components/Tabs";
 import type { BlumPurchase } from "../lib/types";
 
-const EMPTY_FORM = { orderName: "", amount: "", date: new Date().toISOString().slice(0, 10), notes: "" };
-const CHECKBOX_COLUMNS = ["Paid", "Invoice Requested", "Reimbursed"];
+const EMPTY_FORM = { orderName: "", amount: "", date: todayISODate(), notes: "" };
+const CHECKBOX_COLUMNS = ["Paid", "Invoice Requested", "Claimed"];
 
 export const BlumPage: React.FC = () => {
   const { authState } = useAuth();
@@ -35,11 +37,16 @@ export const BlumPage: React.FC = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingEntry, setEditingEntry] = useState<BlumPurchase | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [statusTab, setStatusTab] = useState<"outstanding" | "completed">("outstanding");
 
   const entries = listQuery.data ?? [];
   const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
-  const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
+  const pendingClaims = entries.filter((e) => !e.reimbursed).length;
+  const isFullyDone = (e: BlumPurchase) => e.paidToSeller && !!e.invoiceRequested && e.reimbursed;
+  const outstandingEntries = entries.filter((e) => !isFullyDone(e));
+  const completedEntries = entries.filter(isFullyDone);
+  const visibleEntries = statusTab === "outstanding" ? outstandingEntries : completedEntries;
 
   const setField = (key: keyof typeof EMPTY_FORM) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const resetForm = () => setForm(EMPTY_FORM);
@@ -110,7 +117,7 @@ export const BlumPage: React.FC = () => {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">Blum Purchases</h1>
-          <p className="mt-1 text-[0.9375rem] text-muted-foreground">Track Blum hardware orders and reimbursements</p>
+          <p className="mt-1 text-[0.9375rem] text-muted-foreground">Track Blum hardware orders and claims</p>
         </div>
         <Button onClick={() => setIsOpen(true)}>
           <Plus size={16} /> Add Order
@@ -177,8 +184,17 @@ export const BlumPage: React.FC = () => {
         <SummaryCard label="Total Orders" value={entries.length} icon={<Package size={18} />} />
         <SummaryCard label="Total Amount" value={formatSGD(totalAmount)} icon={<DollarSign size={18} />} />
         <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
-        <SummaryCard label="Pending Reimbursement" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
+        <SummaryCard label="Pending Claims" value={pendingClaims} icon={<RotateCcw size={18} />} />
       </div>
+
+      <Tabs
+        value={statusTab}
+        onValueChange={(v) => setStatusTab(v as "outstanding" | "completed")}
+        options={[
+          { value: "outstanding", label: "Outstanding", count: outstandingEntries.length },
+          { value: "completed", label: "Completed", count: completedEntries.length },
+        ]}
+      />
 
       {listQuery.isLoading ? (
         <div className="rounded-lg border border-border bg-card p-6 shadow">
@@ -188,13 +204,20 @@ export const BlumPage: React.FC = () => {
         <div className="rounded-lg border border-border bg-card shadow">
           <EmptyState icon={<Package size={28} />} message="No Blum orders recorded yet." />
         </div>
+      ) : visibleEntries.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card shadow">
+          <EmptyState
+            icon={<Package size={28} />}
+            message={statusTab === "outstanding" ? "No outstanding orders." : "No completed orders yet."}
+          />
+        </div>
       ) : (
         <>
           <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
             <table className="w-full whitespace-nowrap text-[0.8125rem]">
               <thead className="bg-surface">
                 <tr>
-                  {["Date", "Order Name", "Amount", "Notes", "Paid", "Invoice Requested", "Reimbursed", ""].map((h) => (
+                  {["Date", "Order Name", "Amount", "Notes", "Paid", "Invoice Requested", "Claimed", ""].map((h) => (
                     <th
                       key={h}
                       className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
@@ -207,7 +230,7 @@ export const BlumPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => (
+                {visibleEntries.map((entry) => (
                   <tr key={entry.id} className="hover:bg-surface">
                     <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.orderName}</td>
@@ -241,7 +264,7 @@ export const BlumPage: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-3 md:hidden">
-            {entries.map((entry) => (
+            {visibleEntries.map((entry) => (
               <div key={entry.id} className="rounded-lg border border-border bg-card p-4 shadow">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-col">
@@ -259,7 +282,7 @@ export const BlumPage: React.FC = () => {
                     <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} /> Invoice Requested
                   </label>
                   <label className="flex items-center gap-1.5">
-                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Reimbursed
+                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
                   </label>
                 </div>
                 <div className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2">

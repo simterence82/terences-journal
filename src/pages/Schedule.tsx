@@ -4,6 +4,7 @@ import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useScheduleList, useCreateSchedule, useDeleteSchedule } from "../hooks/useSchedule";
 import { useAuth } from "../lib/AuthContext";
+import { todayISODate } from "../lib/date";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Textarea } from "../components/Textarea";
@@ -11,7 +12,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/D
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 
-const EMPTY_FORM = { title: "", date: new Date().toISOString().slice(0, 10), startTime: "", endTime: "", location: "", notes: "" };
+const EMPTY_FORM = { title: "", date: todayISODate(), startTime: "", endTime: "", location: "", notes: "" };
 
 export const SchedulePage: React.FC = () => {
   const { authState } = useAuth();

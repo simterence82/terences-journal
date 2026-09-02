@@ -6,6 +6,7 @@ import { useLightingList, useCreateLighting, useUpdateLighting, useDeleteLightin
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
 import { formatSGD } from "../lib/formatCurrency";
+import { todayISODate } from "../lib/date";
 import { SummaryCard } from "../components/SummaryCard";
 import { AutoCompleteField } from "../components/AutoCompleteField";
 import { Button } from "../components/Button";
@@ -21,13 +22,13 @@ const EMPTY_FORM = {
   brand: "",
   clientName: "",
   address: "",
-  date: new Date().toISOString().slice(0, 10),
+  date: todayISODate(),
   commissionGiven: "",
   commissionRecipient: "",
   selling: "",
   notes: "",
 };
-const CHECKBOX_COLUMNS = ["Paid", "Reimbursed"];
+const CHECKBOX_COLUMNS = ["Paid", "Claimed"];
 
 interface CostRow {
   vendor: string;
@@ -177,7 +178,7 @@ export const LightingPage: React.FC = () => {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">Smart Lighting Purchases</h1>
-          <p className="mt-1 text-[0.9375rem] text-muted-foreground">Track lighting jobs, commissions, and reimbursements</p>
+          <p className="mt-1 text-[0.9375rem] text-muted-foreground">Track lighting jobs, commissions, and claims</p>
         </div>
         <Button
           onClick={() => setIsOpen(true)}
@@ -342,7 +343,7 @@ export const LightingPage: React.FC = () => {
         <SummaryCard label="Total Entries" value={entries.length} icon={<Lightbulb size={18} />} />
         <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} icon={<DollarSign size={18} />} />
         <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
-        <SummaryCard label="Pending Reimbursement" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
+        <SummaryCard label="Pending Claims" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
       </div>
 
       {listQuery.isLoading ? (
@@ -359,7 +360,7 @@ export const LightingPage: React.FC = () => {
             <table className="w-full whitespace-nowrap text-[0.8125rem]">
               <thead className="bg-surface">
                 <tr>
-                  {["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Notes", "Paid", "Reimbursed", ""].map((h) => (
+                  {["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Notes", "Paid", "Claimed", ""].map((h) => (
                     <th
                       key={h}
                       className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
@@ -443,7 +444,7 @@ export const LightingPage: React.FC = () => {
                     <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} /> Paid
                   </label>
                   <label className="flex items-center gap-1.5">
-                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Reimbursed
+                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
                   </label>
                 </div>
                 <div className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2">
