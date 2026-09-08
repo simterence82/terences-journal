@@ -72,7 +72,8 @@ export const LightingPage: React.FC = () => {
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   const entries = listQuery.data ?? [];
-  const totalProfit = entries.reduce((sum, e) => sum + (e.selling - e.cost), 0);
+  const profitOf = (e: LightingPurchase) => e.selling - e.cost - e.commissionGiven;
+  const totalProfit = entries.reduce((sum, e) => sum + profitOf(e), 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
   const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
 
@@ -378,7 +379,7 @@ export const LightingPage: React.FC = () => {
               </thead>
               <tbody>
                 {entries.map((entry) => (
-                  <tr key={entry.id} className="hover:bg-surface">
+                  <tr key={entry.id} className="cursor-pointer hover:bg-surface" onClick={() => openEdit(entry)}>
                     <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.brand}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.clientName}</td>
@@ -390,17 +391,17 @@ export const LightingPage: React.FC = () => {
                       {formatSGD(entry.cost)}
                     </td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.selling)}</td>
-                    <td className="border-b border-border px-4 py-3 font-semibold text-success">{formatSGD(entry.selling - entry.cost)}</td>
+                    <td className="border-b border-border px-4 py-3 font-semibold text-success">{formatSGD(profitOf(entry))}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.commissionGiven)}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.commissionRecipient || "-"}</td>
                     <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                    <td className="border-b border-border px-4 py-3 text-center">
+                    <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
                     </td>
-                    <td className="border-b border-border px-4 py-3 text-center">
+                    <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
                     </td>
-                    <td className="border-b border-border px-4 py-3">
+                    <td className="border-b border-border px-4 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
                           <Pencil size={16} />
@@ -420,14 +421,14 @@ export const LightingPage: React.FC = () => {
 
           <div className="flex flex-col gap-3 md:hidden">
             {entries.map((entry) => (
-              <div key={entry.id} className="rounded-lg border border-border bg-card p-4 shadow">
+              <div key={entry.id} className="cursor-pointer rounded-lg border border-border bg-card p-4 shadow" onClick={() => openEdit(entry)}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-col">
                     <span className="truncate font-medium text-foreground">{entry.brand} &middot; {entry.clientName}</span>
                     <span className="truncate text-xs text-muted-foreground">{entry.address}</span>
                     <span className="text-xs text-muted-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</span>
                   </div>
-                  <span className="shrink-0 font-semibold text-success">{formatSGD(entry.selling - entry.cost)}</span>
+                  <span className="shrink-0 font-semibold text-success">{formatSGD(profitOf(entry))}</span>
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <span>Cost: <span className="text-foreground">{formatSGD(entry.cost)}</span></span>
@@ -443,7 +444,10 @@ export const LightingPage: React.FC = () => {
                   </div>
                 )}
                 {entry.notes && <p className="mt-2 text-xs text-muted-foreground">{entry.notes}</p>}
-                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-foreground">
+                <div
+                  className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-foreground"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <label className="flex items-center gap-1.5">
                     <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} /> Paid
                   </label>
@@ -451,7 +455,10 @@ export const LightingPage: React.FC = () => {
                     <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
                   </label>
                 </div>
-                <div className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2">
+                <div
+                  className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
                     <Pencil size={16} />
                   </Button>
@@ -490,7 +497,7 @@ export const LightingPage: React.FC = () => {
           return (
             <div className="grid grid-cols-2 gap-2">
               <StatRow label="Total Entries" value={filtered.length} />
-              <StatRow label="Total Profit" value={formatSGD(selling - cost)} />
+              <StatRow label="Total Profit" value={formatSGD(selling - cost - commission)} />
               <StatRow label="Total Cost" value={formatSGD(cost)} />
               <StatRow label="Total Selling" value={formatSGD(selling)} />
               <StatRow label="Total Commission" value={formatSGD(commission)} />
