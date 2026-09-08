@@ -49,7 +49,7 @@ function buildCosts(rows: CostRow[]): LightingCostItem[] {
 }
 
 function costsToRows(costs: LightingCostItem[]): CostRow[] {
-  return costs.length > 0 ? costs.map((c) => ({ vendor: c.vendor ?? "", amount: String(c.amount) })) : [{ ...EMPTY_COST_ROW }];
+  return costs.length > 0 ? costs.map((c) => ({ vendor: c.vendor ?? "", amount: c.amount.toFixed(2) })) : [{ ...EMPTY_COST_ROW }];
 }
 
 export const LightingPage: React.FC = () => {
@@ -130,9 +130,9 @@ export const LightingPage: React.FC = () => {
       clientName: entry.clientName,
       address: entry.address,
       date: entry.date.slice(0, 10),
-      commissionGiven: String(entry.commissionGiven),
+      commissionGiven: entry.commissionGiven.toFixed(2),
       commissionRecipient: entry.commissionRecipient ?? "",
-      selling: String(entry.selling),
+      selling: entry.selling.toFixed(2),
       notes: entry.notes ?? "",
     });
     setEditCostRows(costsToRows(entry.costs));

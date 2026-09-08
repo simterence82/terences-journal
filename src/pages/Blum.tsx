@@ -78,7 +78,7 @@ export const BlumPage: React.FC = () => {
 
   const openEdit = (entry: BlumPurchase) => {
     setEditingEntry(entry);
-    setEditForm({ orderName: entry.orderName, amount: String(entry.amount), date: entry.date.slice(0, 10), notes: entry.notes ?? "" });
+    setEditForm({ orderName: entry.orderName, amount: entry.amount.toFixed(2), date: entry.date.slice(0, 10), notes: entry.notes ?? "" });
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
