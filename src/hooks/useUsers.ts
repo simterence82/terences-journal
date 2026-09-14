@@ -64,6 +64,19 @@ export const useUpdateUserRole = () =>
     mutationFn: ({ id, role }: UpdateUserRoleInput) => updateDoc(doc(db, "users", id), { role }),
   });
 
+export const useBecomeSuperAdmin = () =>
+  useMutation({
+    // One-time bootstrap: while no Super Admin exists yet, an Admin can
+    // promote themselves. The batch also creates meta/superadminSetup,
+    // which closes this window for good (enforced in firestore.rules).
+    mutationFn: async (userId: string) => {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "users", userId), { role: "superadmin" });
+      batch.set(doc(db, "meta", "superadminSetup"), { initializedBy: userId, createdAt: serverTimestamp() });
+      await batch.commit();
+    },
+  });
+
 export interface DeleteUserInput {
   id: string;
   email: string;

@@ -27,6 +27,16 @@ service cloud.firestore {
       return isApproved() && (role() == "admin" || role() == "superadmin");
     }
 
+    // Granting the "superadmin" role normally requires an existing Super
+    // Admin -- but the very first Super Admin has no one to grant it to
+    // them. While meta/superadminSetup doesn't exist yet, any Admin may
+    // grant "superadmin" (including to themselves); the client creates that
+    // sentinel doc atomically alongside the grant, closing the window for
+    // good after the first Super Admin exists.
+    function canGrantSuperAdmin() {
+      return isSuperAdmin() || (isAdmin() && !exists(/databases/$(database)/documents/meta/superadminSetup));
+    }
+
     // Sentinel doc: its existence means an admin has already been
     // bootstrapped. Readable by anyone (even signed out) so the login page
     // can decide whether to show the first-run setup form -- mirrors the
@@ -40,11 +50,23 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Sentinel doc for the Super Admin bootstrap window described above.
+    // Created exactly once, atomically alongside the first Super Admin's
+    // users/{uid} role update.
+    match /meta/superadminSetup {
+      allow get: if isApproved();
+      allow create: if isAdmin() &&
+        request.auth.uid == request.resource.data.initializedBy &&
+        !exists(/databases/$(database)/documents/meta/superadminSetup);
+      allow update, delete: if false;
+    }
+
     // Existence of a users/{uid} doc IS "approved"; its role field is the
     // permission level. Replaces the Firebase Auth custom claim. Granting or
     // revoking the "superadmin" role itself always requires an existing
-    // Super Admin -- otherwise a plain Admin could just promote themselves
-    // and bypass the whole two-person deletion control.
+    // Super Admin (see canGrantSuperAdmin() above for the one-time bootstrap
+    // exception) -- otherwise a plain Admin could just promote themselves
+    // at will and bypass the whole two-person deletion control.
     match /users/{userId} {
       allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
@@ -55,10 +77,10 @@ service cloud.firestore {
         ((request.auth.uid == userId &&
           request.resource.data.role == "admin" &&
           !exists(/databases/$(database)/documents/meta/setup)) ||
-         (isAdmin() && (request.resource.data.role != "superadmin" || isSuperAdmin())));
+         (isAdmin() && (request.resource.data.role != "superadmin" || canGrantSuperAdmin())));
       allow update: if isAdmin() &&
         (resource.data.role != "superadmin" || isSuperAdmin()) &&
-        (request.resource.data.role != "superadmin" || isSuperAdmin());
+        (request.resource.data.role != "superadmin" || canGrantSuperAdmin());
       // Admins can't remove themselves (mirrors the old self-delete guard).
       // Only a Super Admin may remove another Super Admin's account.
       allow delete: if isAdmin() && request.auth.uid != userId &&

@@ -1,7 +1,15 @@
 import React from "react";
-import { Check, Trash2, UserCheck, Users as UsersIcon, X } from "lucide-react";
+import { Check, ShieldPlus, Trash2, UserCheck, Users as UsersIcon, X } from "lucide-react";
 import { toast } from "sonner";
-import { useApproveUser, useDenyUser, useDeleteUser, useUpdateUserRole, usePendingUsersList, useUsersList } from "../hooks/useUsers";
+import {
+  useApproveUser,
+  useBecomeSuperAdmin,
+  useDenyUser,
+  useDeleteUser,
+  useUpdateUserRole,
+  usePendingUsersList,
+  useUsersList,
+} from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
@@ -26,6 +34,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 export const UsersPage: React.FC = () => {
   const { authState } = useAuth();
   const currentUserId = authState.type === "authenticated" ? authState.user.id : null;
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
 
   const listQuery = useUsersList();
@@ -34,11 +43,22 @@ export const UsersPage: React.FC = () => {
   const denyMutation = useDenyUser();
   const deleteMutation = useDeleteUser();
   const updateRoleMutation = useUpdateUserRole();
+  const becomeSuperAdminMutation = useBecomeSuperAdmin();
   const deleteTarget = useConfirmDialog<User>();
   const denyTarget = useConfirmDialog<PendingUser>();
+  const bootstrapConfirm = useConfirmDialog<true>();
 
   const users = listQuery.data ?? [];
   const pendingUsers = pendingQuery.data ?? [];
+  const noSuperAdminYet = !listQuery.isLoading && !users.some((u) => u.role === "superadmin");
+
+  const handleBecomeSuperAdmin = async () => {
+    if (!currentUserId) return;
+    await becomeSuperAdminMutation.mutateAsync(currentUserId, {
+      onSuccess: () => toast.success("You are now a Super Admin"),
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to become Super Admin"),
+    });
+  };
 
   const handleApprove = (pending: PendingUser, role: UserRole) => {
     approveMutation.mutate(
@@ -86,6 +106,23 @@ export const UsersPage: React.FC = () => {
         <h1 className="font-display text-3xl font-semibold text-foreground">User Management</h1>
         <p className="mt-1 text-[0.9375rem] text-muted-foreground">Manage who can access this journal</p>
       </div>
+
+      {isAdmin && !isSuperAdmin && noSuperAdminYet && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning bg-[var(--warning-tint)] px-6 py-4 shadow">
+          <div className="flex items-center gap-3">
+            <ShieldPlus size={20} className="shrink-0 text-warning" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">No Super Admin exists yet</p>
+              <p className="text-xs text-muted-foreground">
+                A Super Admin must approve every deletion. As the one-time setup step, you can promote yourself.
+              </p>
+            </div>
+          </div>
+          <Button variant="destructive" size="sm" onClick={() => bootstrapConfirm.open(true)}>
+            <ShieldPlus size={14} /> Become Super Admin
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold text-foreground">Pending Requests</h2>
@@ -295,6 +332,15 @@ export const UsersPage: React.FC = () => {
         description={`"${denyTarget.target?.displayName ?? ""}" will not be granted access. They can sign up again to submit a new request.`}
         confirmLabel="Deny"
         onConfirm={handleDeny}
+      />
+
+      <ConfirmDialog
+        open={bootstrapConfirm.isOpen}
+        onOpenChange={(open) => !open && bootstrapConfirm.close()}
+        title="Become the first Super Admin?"
+        description="This is a one-time setup step: once a Super Admin exists, only a Super Admin can grant or revoke that role. You'll also be able to approve or reject deletion requests from other Admins."
+        confirmLabel="Become Super Admin"
+        onConfirm={handleBecomeSuperAdmin}
       />
     </div>
   );
