@@ -2,8 +2,10 @@ import React, { useState } from "react";
 import { Trash2, RotateCcw, Paperclip, Trash } from "lucide-react";
 import { toast } from "sonner";
 import { useTrashList, useRestoreTrashItem, usePermanentDeleteTrashItem } from "../hooks/useTrash";
+import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { fetchTaskFileBlob } from "../hooks/useTasks";
 import { fetchIssueFileBlob } from "../hooks/useIssues";
+import { useAuth } from "../lib/AuthContext";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
 import { Checkbox } from "../components/Checkbox";
@@ -29,9 +31,14 @@ function daysUntil(dateStr: string): number {
 }
 
 export const TrashPage: React.FC = () => {
+  const { authState } = useAuth();
+  const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
+
   const listQuery = useTrashList();
   const restoreMutation = useRestoreTrashItem();
   const permanentDeleteMutation = usePermanentDeleteTrashItem();
+  const requestDeletionMutation = useRequestDeletion();
   const [permanentTarget, setPermanentTarget] = useState<TrashItem | null>(null);
   const [previewItem, setPreviewItem] = useState<TrashItem | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -58,10 +65,27 @@ export const TrashPage: React.FC = () => {
 
   const handleBulkDelete = async () => {
     try {
-      await Promise.all(
-        selectedItems.map((item) => permanentDeleteMutation.mutateAsync({ kind: item.kind, id: item.id }))
-      );
-      toast.success(`${selectedItems.length} item(s) permanently deleted`);
+      if (isSuperAdmin) {
+        await Promise.all(
+          selectedItems.map((item) => permanentDeleteMutation.mutateAsync({ kind: item.kind, id: item.id }))
+        );
+        toast.success(`${selectedItems.length} item(s) permanently deleted`);
+      } else {
+        await Promise.all(
+          selectedItems.map((item) =>
+            requestDeletionMutation.mutateAsync({
+              kind: item.kind,
+              entityId: item.id,
+              action: "permanent",
+              title: item.title,
+              subtitle: item.subtitle,
+              requestedBy: currentUser?.id ?? null,
+              requestedByName: currentUser?.displayName ?? null,
+            })
+          )
+        );
+        toast.success(`${selectedItems.length} deletion request(s) sent to Super Admin for approval`);
+      }
       setSelected(new Set());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete some items");
@@ -81,13 +105,31 @@ export const TrashPage: React.FC = () => {
 
   const handlePermanentDelete = async () => {
     if (!permanentTarget) return;
-    await permanentDeleteMutation.mutateAsync(
-      { kind: permanentTarget.kind, id: permanentTarget.id },
-      {
-        onSuccess: () => toast.success(`"${permanentTarget.title}" permanently deleted`),
-        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to permanently delete item"),
-      }
-    );
+    if (isSuperAdmin) {
+      await permanentDeleteMutation.mutateAsync(
+        { kind: permanentTarget.kind, id: permanentTarget.id },
+        {
+          onSuccess: () => toast.success(`"${permanentTarget.title}" permanently deleted`),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to permanently delete item"),
+        }
+      );
+    } else {
+      await requestDeletionMutation.mutateAsync(
+        {
+          kind: permanentTarget.kind,
+          entityId: permanentTarget.id,
+          action: "permanent",
+          title: permanentTarget.title,
+          subtitle: permanentTarget.subtitle,
+          requestedBy: currentUser?.id ?? null,
+          requestedByName: currentUser?.displayName ?? null,
+        },
+        {
+          onSuccess: () => toast.success("Deletion request sent to Super Admin for approval"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to request deletion"),
+        }
+      );
+    }
   };
 
   return (
@@ -251,7 +293,11 @@ export const TrashPage: React.FC = () => {
         open={permanentTarget !== null}
         onOpenChange={(open) => !open && setPermanentTarget(null)}
         title="Permanently delete this item?"
-        description={`"${permanentTarget?.title ?? ""}" will be permanently deleted right now. This cannot be undone.`}
+        description={
+          isSuperAdmin
+            ? `"${permanentTarget?.title ?? ""}" will be permanently deleted right now. This cannot be undone.`
+            : `This will send a deletion request to a Super Admin. "${permanentTarget?.title ?? ""}" stays in the Trash Bin until they approve it.`
+        }
         confirmLabel="Delete Permanently"
         onConfirm={handlePermanentDelete}
       />
@@ -260,7 +306,11 @@ export const TrashPage: React.FC = () => {
         open={isBulkDeleteOpen}
         onOpenChange={setIsBulkDeleteOpen}
         title={`Permanently delete ${selected.size} item(s)?`}
-        description="These items will be permanently deleted right now. This cannot be undone."
+        description={
+          isSuperAdmin
+            ? "These items will be permanently deleted right now. This cannot be undone."
+            : "This will send deletion requests to a Super Admin. The items stay in the Trash Bin until approved."
+        }
         confirmLabel="Delete Permanently"
         onConfirm={handleBulkDelete}
       />

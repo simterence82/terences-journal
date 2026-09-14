@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "member";
+export type UserRole = "superadmin" | "admin" | "member";
 
 export interface User {
   id: string;
@@ -12,6 +12,21 @@ export interface PendingUser {
   id: string;
   email: string;
   displayName: string;
+  requestedAt: string;
+}
+
+export type PendingDeletionEntityKind = "lighting" | "blum" | "tasks" | "issues" | "schedule";
+export type PendingDeletionAction = "soft" | "permanent";
+
+export interface PendingDeletion {
+  id: string;
+  kind: PendingDeletionEntityKind;
+  entityId: string;
+  action: PendingDeletionAction;
+  title: string;
+  subtitle: string;
+  requestedBy: string | null;
+  requestedByName: string | null;
   requestedAt: string;
 }
 

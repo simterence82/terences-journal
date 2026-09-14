@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { collection, deleteDoc, doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
@@ -52,6 +52,16 @@ export const useApproveUser = () =>
 export const useDenyUser = () =>
   useMutation({
     mutationFn: (id: string) => deleteDoc(doc(db, "pendingUsers", id)),
+  });
+
+export interface UpdateUserRoleInput {
+  id: string;
+  role: UserRole;
+}
+
+export const useUpdateUserRole = () =>
+  useMutation({
+    mutationFn: ({ id, role }: UpdateUserRoleInput) => updateDoc(doc(db, "users", id), { role }),
   });
 
 export interface DeleteUserInput {

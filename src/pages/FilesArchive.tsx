@@ -18,7 +18,7 @@ const fileKey = (f: Pick<FileArchiveItem, "kind" | "id">) => `${f.kind}-${f.id}`
 
 export const FilesArchivePage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && authState.user.role === "admin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
 
   const listQuery = useFilesArchiveList();
   const removeTaskFileMutation = useRemoveTaskFile();

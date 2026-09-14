@@ -10,6 +10,7 @@ import {
   useRemoveIssueFile,
   fetchIssueFileBlob,
 } from "../hooks/useIssues";
+import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { EmptyState } from "../components/EmptyState";
 import { useAuth } from "../lib/AuthContext";
 import { Badge } from "../components/Badge";
@@ -30,7 +31,9 @@ const ACCEPTED_TYPES = "application/pdf,image/jpeg,image/png";
 
 export const IssuesPage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && authState.user.role === "admin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
 
   const listQuery = useIssuesList();
   const createMutation = useCreateIssue();
@@ -38,7 +41,8 @@ export const IssuesPage: React.FC = () => {
   const deleteMutation = useDeleteIssue();
   const bulkDeleteMutation = useDeleteIssues();
   const removeFileMutation = useRemoveIssueFile();
-  const deleteTarget = useConfirmDialog<string>();
+  const requestDeletionMutation = useRequestDeletion();
+  const deleteTarget = useConfirmDialog<Issue>();
 
   const [statusTab, setStatusTab] = useState<"unresolved" | "resolved">("unresolved");
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -78,8 +82,26 @@ export const IssuesPage: React.FC = () => {
   const handleBulkDelete = async () => {
     const ids = Array.from(selected);
     try {
-      await bulkDeleteMutation.mutateAsync(ids);
-      toast.success(`${ids.length} issue(s) moved to Trash Bin`);
+      if (isSuperAdmin) {
+        await bulkDeleteMutation.mutateAsync(ids);
+        toast.success(`${ids.length} issue(s) moved to Trash Bin`);
+      } else {
+        const targets = issues.filter((i) => selected.has(i.id));
+        await Promise.all(
+          targets.map((i) =>
+            requestDeletionMutation.mutateAsync({
+              kind: "issues",
+              entityId: i.id,
+              action: "soft",
+              title: i.title,
+              subtitle: "Outstanding Issue",
+              requestedBy: currentUser?.id ?? null,
+              requestedByName: currentUser?.displayName ?? null,
+            })
+          )
+        );
+        toast.success(`${ids.length} deletion request(s) sent to Super Admin for approval`);
+      }
       setSelected(new Set());
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to delete some issues");
@@ -147,11 +169,30 @@ export const IssuesPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (deleteTarget.target === null) return;
-    await deleteMutation.mutateAsync(deleteTarget.target, {
-      onSuccess: () => toast.success("Issue moved to Trash Bin"),
-      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete issue"),
-    });
+    const issue = deleteTarget.target;
+    if (issue === null) return;
+    if (isSuperAdmin) {
+      await deleteMutation.mutateAsync(issue.id, {
+        onSuccess: () => toast.success("Issue moved to Trash Bin"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete issue"),
+      });
+    } else {
+      await requestDeletionMutation.mutateAsync(
+        {
+          kind: "issues",
+          entityId: issue.id,
+          action: "soft",
+          title: issue.title,
+          subtitle: "Outstanding Issue",
+          requestedBy: currentUser?.id ?? null,
+          requestedByName: currentUser?.displayName ?? null,
+        },
+        {
+          onSuccess: () => toast.success("Deletion request sent to Super Admin for approval"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to request deletion"),
+        }
+      );
+    }
   };
 
   return (
@@ -293,7 +334,7 @@ export const IssuesPage: React.FC = () => {
                     <Pencil size={16} />
                   </Button>
                   {isAdmin && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(issue.id)} aria-label="Delete issue">
+                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(issue)} aria-label="Delete issue">
                       <Trash2 size={16} />
                     </Button>
                   )}
@@ -308,7 +349,11 @@ export const IssuesPage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this issue?"
-        description="This will move the issue to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+        description={
+          isSuperAdmin
+            ? "This will move the issue to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+            : "This will send a deletion request to a Super Admin. The issue stays visible until they approve it."
+        }
         onConfirm={handleDelete}
       />
 
@@ -316,7 +361,11 @@ export const IssuesPage: React.FC = () => {
         open={isBulkDeleteOpen}
         onOpenChange={setIsBulkDeleteOpen}
         title={`Delete ${selected.size} issue(s)?`}
-        description="These issues will be moved to the Trash Bin, where they can be restored within 60 days before being permanently removed."
+        description={
+          isSuperAdmin
+            ? "These issues will be moved to the Trash Bin, where they can be restored within 60 days before being permanently removed."
+            : "This will send deletion requests to a Super Admin. The issues stay visible until approved."
+        }
         onConfirm={handleBulkDelete}
       />
 

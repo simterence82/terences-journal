@@ -3,6 +3,7 @@ import { Plus, Trash2, Pencil, Package, DollarSign, Clock, RotateCcw } from "luc
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useBlumList, useCreateBlum, useUpdateBlum, useDeleteBlum } from "../hooks/useBlum";
+import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
 import { formatSGD } from "../lib/formatCurrency";
@@ -25,14 +26,17 @@ const CHECKBOX_COLUMNS = ["Paid", "Invoice Requested", "Claimed"];
 
 export const BlumPage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && authState.user.role === "admin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
 
   const listQuery = useBlumList();
   const lookupsQuery = useLookups();
   const createMutation = useCreateBlum();
   const updateMutation = useUpdateBlum();
   const deleteMutation = useDeleteBlum();
-  const deleteTarget = useConfirmDialog<string>();
+  const requestDeletionMutation = useRequestDeletion();
+  const deleteTarget = useConfirmDialog<BlumPurchase>();
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -107,11 +111,30 @@ export const BlumPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (deleteTarget.target === null) return;
-    await deleteMutation.mutateAsync(deleteTarget.target, {
-      onSuccess: () => toast.success("Order moved to Trash Bin"),
-      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete order"),
-    });
+    const entry = deleteTarget.target;
+    if (entry === null) return;
+    if (isSuperAdmin) {
+      await deleteMutation.mutateAsync(entry.id, {
+        onSuccess: () => toast.success("Order moved to Trash Bin"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete order"),
+      });
+    } else {
+      await requestDeletionMutation.mutateAsync(
+        {
+          kind: "blum",
+          entityId: entry.id,
+          action: "soft",
+          title: entry.orderName,
+          subtitle: "Blum Purchase",
+          requestedBy: currentUser?.id ?? null,
+          requestedByName: currentUser?.displayName ?? null,
+        },
+        {
+          onSuccess: () => toast.success("Deletion request sent to Super Admin for approval"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to request deletion"),
+        }
+      );
+    }
   };
 
   return (
@@ -255,7 +278,7 @@ export const BlumPage: React.FC = () => {
                           <Pencil size={16} />
                         </Button>
                         {isAdmin && (
-                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete order">
+                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete order">
                             <Trash2 size={16} />
                           </Button>
                         )}
@@ -294,7 +317,7 @@ export const BlumPage: React.FC = () => {
                     <Pencil size={16} />
                   </Button>
                   {isAdmin && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete order">
+                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete order">
                       <Trash2 size={16} />
                     </Button>
                   )}
@@ -309,7 +332,11 @@ export const BlumPage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this order?"
-        description="This will move the order to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+        description={
+          isSuperAdmin
+            ? "This will move the order to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+            : "This will send a deletion request to a Super Admin. The order stays visible until they approve it."
+        }
         onConfirm={handleDelete}
       />
 

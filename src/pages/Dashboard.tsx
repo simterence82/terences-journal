@@ -19,7 +19,11 @@ import { useIssuesList } from "../hooks/useIssues";
 import { useLightingList } from "../hooks/useLighting";
 import { useBlumList } from "../hooks/useBlum";
 import { useScheduleList } from "../hooks/useSchedule";
+import { usePendingDeletionsList, useApproveDeletion, useRejectDeletion } from "../hooks/usePendingDeletions";
 import { useAuth } from "../lib/AuthContext";
+import { toast } from "sonner";
+import { ShieldAlert, Check, X as XIcon } from "lucide-react";
+import { Button } from "../components/Button";
 import { getChineseLunarDateLabel } from "../lib/lunarCalendar";
 import { todayISODate } from "../lib/date";
 import { SAMPLE_WEATHER, SAMPLE_HEADLINES } from "../lib/sampleWeatherNews";
@@ -39,13 +43,33 @@ const CONDITION_ICON: Record<string, React.ReactNode> = {
 
 export const DashboardPage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && authState.user.role === "admin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
 
   const tasksQuery = useTasksList();
   const issuesQuery = useIssuesList();
   const lightingQuery = useLightingList();
   const blumQuery = useBlumList();
   const scheduleQuery = useScheduleList();
+  const pendingDeletionsQuery = usePendingDeletionsList();
+  const approveDeletionMutation = useApproveDeletion();
+  const rejectDeletionMutation = useRejectDeletion();
+
+  const pendingDeletions = pendingDeletionsQuery.data ?? [];
+
+  const handleApproveDeletion = (request: (typeof pendingDeletions)[number]) => {
+    approveDeletionMutation.mutate(request, {
+      onSuccess: () => toast.success("Deletion approved"),
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to approve deletion"),
+    });
+  };
+
+  const handleRejectDeletion = (id: string) => {
+    rejectDeletionMutation.mutate(id, {
+      onSuccess: () => toast.success("Deletion request rejected"),
+      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to reject deletion"),
+    });
+  };
 
   const gregorianLabel = useMemo(
     () =>
@@ -84,6 +108,38 @@ export const DashboardPage: React.FC = () => {
         <h1 className="font-display text-3xl font-semibold text-foreground">Dashboard</h1>
         <p className="mt-1 text-[0.9375rem] text-muted-foreground">Your daily overview at a glance</p>
       </div>
+
+      {isSuperAdmin && pendingDeletions.length > 0 && (
+        <section className="rounded-lg border border-warning bg-[var(--warning-tint)] p-6 shadow">
+          <div className="mb-4 flex items-center gap-2">
+            <ShieldAlert size={18} className="text-warning" />
+            <h2 className="font-display text-[1.0625rem] font-semibold text-foreground">
+              Deletion Requests Awaiting Your Approval ({pendingDeletions.length})
+            </h2>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {pendingDeletions.map((request) => (
+              <li key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-border bg-card p-3">
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium text-foreground">{request.title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {request.subtitle} &middot; {request.action === "permanent" ? "Permanent delete" : "Move to Trash Bin"}
+                    {request.requestedByName && ` · requested by ${request.requestedByName}`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="destructive" onClick={() => handleApproveDeletion(request)}>
+                    <Check size={14} /> Approve
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => handleRejectDeletion(request.id)}>
+                    <XIcon size={14} /> Reject
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-border bg-card px-6 py-4 shadow">

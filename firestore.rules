@@ -12,9 +12,19 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function role() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isSuperAdmin() {
+      return isApproved() && role() == "superadmin";
+    }
+
+    // Admin-tier or above. Super Admins get every Admin capability plus the
+    // exclusive right to actually carry out a delete (see canEditRecord()
+    // and the domain-collection "delete" rules below).
     function isAdmin() {
-      return isApproved() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      return isApproved() && (role() == "admin" || role() == "superadmin");
     }
 
     // Sentinel doc: its existence means an admin has already been
@@ -31,7 +41,10 @@ service cloud.firestore {
     }
 
     // Existence of a users/{uid} doc IS "approved"; its role field is the
-    // permission level. Replaces the Firebase Auth custom claim.
+    // permission level. Replaces the Firebase Auth custom claim. Granting or
+    // revoking the "superadmin" role itself always requires an existing
+    // Super Admin -- otherwise a plain Admin could just promote themselves
+    // and bypass the whole two-person deletion control.
     match /users/{userId} {
       allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
       allow list: if isAdmin();
@@ -42,15 +55,20 @@ service cloud.firestore {
         ((request.auth.uid == userId &&
           request.resource.data.role == "admin" &&
           !exists(/databases/$(database)/documents/meta/setup)) ||
-         isAdmin());
-      allow update: if isAdmin();
+         (isAdmin() && (request.resource.data.role != "superadmin" || isSuperAdmin())));
+      allow update: if isAdmin() &&
+        (resource.data.role != "superadmin" || isSuperAdmin()) &&
+        (request.resource.data.role != "superadmin" || isSuperAdmin());
       // Admins can't remove themselves (mirrors the old self-delete guard).
-      allow delete: if isAdmin() && request.auth.uid != userId;
+      // Only a Super Admin may remove another Super Admin's account.
+      allow delete: if isAdmin() && request.auth.uid != userId &&
+        (resource.data.role != "superadmin" || isSuperAdmin());
     }
 
     // A user writes their own pending request at sign-up time; only admins
     // can see the queue and approve (delete + create users/{uid}) or deny
-    // (delete only).
+    // (delete only). Approving as "superadmin" is still gated by the
+    // users/{userId} create rule above.
     match /pendingUsers/{userId} {
       allow get, list: if isAdmin();
       allow create: if request.auth != null && request.auth.uid == userId;
@@ -70,55 +88,79 @@ service cloud.firestore {
       allow update: if false;
     }
 
+    // A deletion (soft-delete into Trash Bin, or permanent delete from the
+    // Trash Bin) requested by an Admin but not yet carried out. Only a Super
+    // Admin can act on the queue -- approving performs the real write on the
+    // target record and then removes this doc; rejecting just removes it.
+    match /pendingDeletions/{id} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.requestedBy == request.auth.uid;
+      allow update: if false;
+      allow delete: if isSuperAdmin();
+    }
+
     // Shared shape for the five domain collections: any approved user
     // (admin or member) can read/create/edit records, matching the old
-    // requireAuth-only routes. Only admins may touch isDeleted/deletedAt
-    // (soft-delete or restore) or hard-delete a document, matching the old
-    // requireAdmin-gated DELETE routes and the fully admin-gated trash.ts.
+    // requireAuth-only routes. Only a Super Admin may actually flip
+    // isDeleted/deletedAt into the trash (soft-delete) or hard-delete a
+    // document -- an Admin has to go through pendingDeletions instead.
+    // Restoring out of the trash is non-destructive, so it stays available
+    // to any Admin (or Super Admin), same as before.
+    function touchesDeletionFields() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(["isDeleted", "deletedAt"]);
+    }
+
+    function isRestoring() {
+      return resource.data.isDeleted == true && request.resource.data.isDeleted == false;
+    }
+
     function canEditRecord() {
       return isApproved() &&
-        (isAdmin() ||
-         !request.resource.data.diff(resource.data).affectedKeys().hasAny(["isDeleted", "deletedAt"]));
+        (!touchesDeletionFields() || (isRestoring() ? isAdmin() : isSuperAdmin()));
     }
 
     match /lightingPurchases/{id} {
       allow get, list: if isApproved();
       allow create: if isApproved();
       allow update: if canEditRecord();
-      allow delete: if isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     match /blumPurchases/{id} {
       allow get, list: if isApproved();
       allow create: if isApproved();
       allow update: if canEditRecord();
-      allow delete: if isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     match /tasks/{id} {
       allow get, list: if isApproved();
       allow create: if isApproved();
       allow update: if canEditRecord();
-      allow delete: if isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     match /issues/{id} {
       allow get, list: if isApproved();
       allow create: if isApproved();
       allow update: if canEditRecord();
-      allow delete: if isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     match /scheduleEvents/{id} {
       allow get, list: if isApproved();
       allow create: if isApproved();
       allow update: if canEditRecord();
-      allow delete: if isAdmin();
+      allow delete: if isSuperAdmin();
     }
 
     // Sibling collections holding the base64 file bytes for tasks/issues,
     // kept separate so list queries never have to transfer attachment data.
-    // Write-once: there's no "replace attachment" flow.
+    // Write-once: there's no "replace attachment" flow. Removing an
+    // attachment (while keeping the task/issue itself) is not "deleting an
+    // entry", so it stays available to any Admin -- the two-tier approval
+    // only applies to deleting the task/issue record itself, cleaned up via
+    // useApproveDeletion's permanent-delete branch.
     match /taskFiles/{id} {
       allow get: if isApproved();
       allow create: if isApproved();

@@ -1,36 +1,62 @@
 import React from "react";
 import { Check, Trash2, UserCheck, Users as UsersIcon, X } from "lucide-react";
 import { toast } from "sonner";
-import { useApproveUser, useDenyUser, useDeleteUser, usePendingUsersList, useUsersList } from "../hooks/useUsers";
+import { useApproveUser, useDenyUser, useDeleteUser, useUpdateUserRole, usePendingUsersList, useUsersList } from "../hooks/useUsers";
 import { useAuth } from "../lib/AuthContext";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
+import { Select } from "../components/Select";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 import { EmptyState } from "../components/EmptyState";
-import type { PendingUser, User } from "../lib/types";
+import type { PendingUser, User, UserRole } from "../lib/types";
+
+const ROLE_BADGE_VARIANT: Record<UserRole, "destructive" | "primary" | "secondary"> = {
+  superadmin: "destructive",
+  admin: "primary",
+  member: "secondary",
+};
+
+const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
+  { value: "member", label: "Member" },
+  { value: "admin", label: "Admin" },
+  { value: "superadmin", label: "Super Admin" },
+];
 
 export const UsersPage: React.FC = () => {
   const { authState } = useAuth();
   const currentUserId = authState.type === "authenticated" ? authState.user.id : null;
+  const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
 
   const listQuery = useUsersList();
   const pendingQuery = usePendingUsersList();
   const approveMutation = useApproveUser();
   const denyMutation = useDenyUser();
   const deleteMutation = useDeleteUser();
+  const updateRoleMutation = useUpdateUserRole();
   const deleteTarget = useConfirmDialog<User>();
   const denyTarget = useConfirmDialog<PendingUser>();
 
   const users = listQuery.data ?? [];
   const pendingUsers = pendingQuery.data ?? [];
 
-  const handleApprove = (pending: PendingUser, role: "admin" | "member") => {
+  const handleApprove = (pending: PendingUser, role: UserRole) => {
     approveMutation.mutate(
       { id: pending.id, email: pending.email, displayName: pending.displayName, role },
       {
         onSuccess: () => toast.success("User approved"),
         onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to approve user"),
+      }
+    );
+  };
+
+  const handleRoleChange = (user: User, role: UserRole) => {
+    if (role === user.role) return;
+    updateRoleMutation.mutate(
+      { id: user.id, role },
+      {
+        onSuccess: () => toast.success(`${user.displayName}'s role updated`),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update role"),
       }
     );
   };
@@ -110,6 +136,16 @@ export const UsersPage: React.FC = () => {
                           >
                             <Check size={14} /> Approve as Admin
                           </Button>
+                          {isSuperAdmin && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={approveMutation.isPending}
+                              onClick={() => handleApprove(p, "superadmin")}
+                            >
+                              <Check size={14} /> Approve as Super Admin
+                            </Button>
+                          )}
                           <Button variant="ghost" size="sm" onClick={() => denyTarget.open(p)}>
                             <X size={14} /> Deny
                           </Button>
@@ -138,6 +174,11 @@ export const UsersPage: React.FC = () => {
                     <Button variant="secondary" size="sm" disabled={approveMutation.isPending} onClick={() => handleApprove(p, "admin")}>
                       <Check size={14} /> Approve as Admin
                     </Button>
+                    {isSuperAdmin && (
+                      <Button variant="destructive" size="sm" disabled={approveMutation.isPending} onClick={() => handleApprove(p, "superadmin")}>
+                        <Check size={14} /> Approve as Super Admin
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={() => denyTarget.open(p)}>
                       <X size={14} /> Deny
                     </Button>
@@ -178,11 +219,20 @@ export const UsersPage: React.FC = () => {
                       <td className="border-b border-border px-4 py-3 text-foreground">{u.displayName}</td>
                       <td className="border-b border-border px-4 py-3 text-foreground">{u.email}</td>
                       <td className="border-b border-border px-4 py-3">
-                        <Badge variant={u.role === "admin" ? "primary" : "secondary"}>{u.role}</Badge>
+                        {isSuperAdmin && u.id !== currentUserId ? (
+                          <Select
+                            value={u.role}
+                            onValueChange={(v) => handleRoleChange(u, v as UserRole)}
+                            options={ROLE_OPTIONS}
+                            className="w-40"
+                          />
+                        ) : (
+                          <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{u.role}</Badge>
+                        )}
                       </td>
                       <td className="border-b border-border px-4 py-3 text-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</td>
                       <td className="border-b border-border px-4 py-3">
-                        {u.id !== currentUserId && (
+                        {u.id !== currentUserId && (u.role !== "superadmin" || isSuperAdmin) && (
                           <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
                             <Trash2 size={16} />
                           </Button>
@@ -204,13 +254,24 @@ export const UsersPage: React.FC = () => {
                       <span className="text-xs text-muted-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <Badge variant={u.role === "admin" ? "primary" : "secondary"}>{u.role}</Badge>
-                      {u.id !== currentUserId && (
+                      {u.id !== currentUserId && (u.role !== "superadmin" || isSuperAdmin) && (
                         <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
                           <Trash2 size={16} />
                         </Button>
                       )}
                     </div>
+                  </div>
+                  <div className="mt-2 border-t border-border pt-2">
+                    {isSuperAdmin && u.id !== currentUserId ? (
+                      <Select
+                        value={u.role}
+                        onValueChange={(v) => handleRoleChange(u, v as UserRole)}
+                        options={ROLE_OPTIONS}
+                        className="w-40"
+                      />
+                    ) : (
+                      <Badge variant={ROLE_BADGE_VARIANT[u.role]}>{u.role}</Badge>
+                    )}
                   </div>
                 </div>
               ))}

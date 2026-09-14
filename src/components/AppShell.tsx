@@ -72,7 +72,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </div>
 
         <nav className="flex flex-col gap-1">
-          {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin").map(({ to, label, icon: Icon, end }) => (
+          {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin" || user?.role === "superadmin").map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -120,7 +120,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 </div>
                 <div className="hidden flex-col gap-0.5 sm:flex">
                   <span className="text-[0.8125rem] font-semibold leading-none text-foreground">{user.displayName}</span>
-                  <Badge variant={user.role === "admin" ? "primary" : "secondary"} className="w-fit">
+                  <Badge variant={user.role === "superadmin" ? "destructive" : user.role === "admin" ? "primary" : "secondary"} className="w-fit">
                     {user.role}
                   </Badge>
                 </div>

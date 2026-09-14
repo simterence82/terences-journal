@@ -3,6 +3,7 @@ import { Plus, X, Trash2, Pencil, Lightbulb, DollarSign, Clock, RotateCcw } from
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useLightingList, useCreateLighting, useUpdateLighting, useDeleteLighting } from "../hooks/useLighting";
+import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
 import { formatSGD } from "../lib/formatCurrency";
@@ -54,14 +55,17 @@ function costsToRows(costs: LightingCostItem[]): CostRow[] {
 
 export const LightingPage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && authState.user.role === "admin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
 
   const listQuery = useLightingList();
   const lookupsQuery = useLookups();
   const createMutation = useCreateLighting();
   const updateMutation = useUpdateLighting();
   const deleteMutation = useDeleteLighting();
-  const deleteTarget = useConfirmDialog<string>();
+  const requestDeletionMutation = useRequestDeletion();
+  const deleteTarget = useConfirmDialog<LightingPurchase>();
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -169,11 +173,30 @@ export const LightingPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (deleteTarget.target === null) return;
-    await deleteMutation.mutateAsync(deleteTarget.target, {
-      onSuccess: () => toast.success("Entry moved to Trash Bin"),
-      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete entry"),
-    });
+    const entry = deleteTarget.target;
+    if (entry === null) return;
+    if (isSuperAdmin) {
+      await deleteMutation.mutateAsync(entry.id, {
+        onSuccess: () => toast.success("Entry moved to Trash Bin"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete entry"),
+      });
+    } else {
+      await requestDeletionMutation.mutateAsync(
+        {
+          kind: "lighting",
+          entityId: entry.id,
+          action: "soft",
+          title: `${entry.brand} - ${entry.clientName}`,
+          subtitle: "Smart Lighting Purchase",
+          requestedBy: currentUser?.id ?? null,
+          requestedByName: currentUser?.displayName ?? null,
+        },
+        {
+          onSuccess: () => toast.success("Deletion request sent to Super Admin for approval"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to request deletion"),
+        }
+      );
+    }
   };
 
   return (
@@ -407,7 +430,7 @@ export const LightingPage: React.FC = () => {
                           <Pencil size={16} />
                         </Button>
                         {isAdmin && (
-                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
+                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                             <Trash2 size={16} />
                           </Button>
                         )}
@@ -463,7 +486,7 @@ export const LightingPage: React.FC = () => {
                     <Pencil size={16} />
                   </Button>
                   {isAdmin && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
+                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                       <Trash2 size={16} />
                     </Button>
                   )}
@@ -478,7 +501,11 @@ export const LightingPage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this entry?"
-        description="This will move the entry to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+        description={
+          isSuperAdmin
+            ? "This will move the entry to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+            : "This will send a deletion request to a Super Admin. The entry stays visible until they approve it."
+        }
         onConfirm={handleDelete}
       />
 

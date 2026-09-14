@@ -3,6 +3,7 @@ import { Plus, Trash2, CalendarClock } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useScheduleList, useCreateSchedule, useDeleteSchedule } from "../hooks/useSchedule";
+import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { useAuth } from "../lib/AuthContext";
 import { todayISODate } from "../lib/date";
 import { Button } from "../components/Button";
@@ -16,12 +17,15 @@ const EMPTY_FORM = { title: "", date: todayISODate(), startTime: "", endTime: ""
 
 export const SchedulePage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && authState.user.role === "admin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const currentUser = authState.type === "authenticated" ? authState.user : null;
 
   const listQuery = useScheduleList();
   const createMutation = useCreateSchedule();
   const deleteMutation = useDeleteSchedule();
-  const deleteTarget = useConfirmDialog<string>();
+  const requestDeletionMutation = useRequestDeletion();
+  const deleteTarget = useConfirmDialog<{ id: string; title: string; date: string }>();
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -57,11 +61,30 @@ export const SchedulePage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (deleteTarget.target === null) return;
-    await deleteMutation.mutateAsync(deleteTarget.target, {
-      onSuccess: () => toast.success("Entry moved to Trash Bin"),
-      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete entry"),
-    });
+    const entry = deleteTarget.target;
+    if (entry === null) return;
+    if (isSuperAdmin) {
+      await deleteMutation.mutateAsync(entry.id, {
+        onSuccess: () => toast.success("Entry moved to Trash Bin"),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to delete entry"),
+      });
+    } else {
+      await requestDeletionMutation.mutateAsync(
+        {
+          kind: "schedule",
+          entityId: entry.id,
+          action: "soft",
+          title: entry.title,
+          subtitle: `Schedule - ${entry.date}`,
+          requestedBy: currentUser?.id ?? null,
+          requestedByName: currentUser?.displayName ?? null,
+        },
+        {
+          onSuccess: () => toast.success("Deletion request sent to Super Admin for approval"),
+          onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to request deletion"),
+        }
+      );
+    }
   };
 
   return (
@@ -148,7 +171,7 @@ export const SchedulePage: React.FC = () => {
                     <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
                     {isAdmin && (
                       <td className="border-b border-border px-4 py-3">
-                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
+                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                           <Trash2 size={16} />
                         </Button>
                       </td>
@@ -172,7 +195,7 @@ export const SchedulePage: React.FC = () => {
                     {entry.location && <span className="text-xs text-muted-foreground">{entry.location}</span>}
                   </div>
                   {isAdmin && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry.id)} aria-label="Delete entry">
+                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                       <Trash2 size={16} />
                     </Button>
                   )}
@@ -188,7 +211,11 @@ export const SchedulePage: React.FC = () => {
         open={deleteTarget.isOpen}
         onOpenChange={(open) => !open && deleteTarget.close()}
         title="Delete this schedule entry?"
-        description="This will move the entry to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+        description={
+          isSuperAdmin
+            ? "This will move the entry to the Trash Bin, where it can be restored within 60 days before being permanently removed."
+            : "This will send a deletion request to a Super Admin. The entry stays visible until they approve it."
+        }
         onConfirm={handleDelete}
       />
     </div>

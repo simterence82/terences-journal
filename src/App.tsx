@@ -18,7 +18,7 @@ export const App: React.FC = () => (
     <Route
       path="/"
       element={
-        <ProtectedRoute roles={["admin", "member"]}>
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <DashboardPage />
         </ProtectedRoute>
       }
@@ -26,7 +26,7 @@ export const App: React.FC = () => (
     <Route
       path="/schedule"
       element={
-        <ProtectedRoute roles={["admin", "member"]}>
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <SchedulePage />
         </ProtectedRoute>
       }
@@ -34,7 +34,7 @@ export const App: React.FC = () => (
     <Route
       path="/lighting"
       element={
-        <ProtectedRoute roles={["admin", "member"]}>
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <LightingPage />
         </ProtectedRoute>
       }
@@ -42,7 +42,7 @@ export const App: React.FC = () => (
     <Route
       path="/blum"
       element={
-        <ProtectedRoute roles={["admin", "member"]}>
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <BlumPage />
         </ProtectedRoute>
       }
@@ -50,7 +50,7 @@ export const App: React.FC = () => (
     <Route
       path="/tasks"
       element={
-        <ProtectedRoute roles={["admin", "member"]}>
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <TasksPage />
         </ProtectedRoute>
       }
@@ -58,7 +58,7 @@ export const App: React.FC = () => (
     <Route
       path="/issues"
       element={
-        <ProtectedRoute roles={["admin", "member"]}>
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <IssuesPage />
         </ProtectedRoute>
       }
@@ -66,7 +66,7 @@ export const App: React.FC = () => (
     <Route
       path="/files-archive"
       element={
-        <ProtectedRoute roles={["admin", "member"]}>
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <FilesArchivePage />
         </ProtectedRoute>
       }
@@ -74,7 +74,7 @@ export const App: React.FC = () => (
     <Route
       path="/users"
       element={
-        <ProtectedRoute roles={["admin"]}>
+        <ProtectedRoute roles={["superadmin", "admin"]}>
           <UsersPage />
         </ProtectedRoute>
       }
@@ -82,7 +82,7 @@ export const App: React.FC = () => (
     <Route
       path="/trash"
       element={
-        <ProtectedRoute roles={["admin"]}>
+        <ProtectedRoute roles={["superadmin", "admin"]}>
           <TrashPage />
         </ProtectedRoute>
       }
