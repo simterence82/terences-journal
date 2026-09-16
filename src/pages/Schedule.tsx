@@ -17,7 +17,7 @@ const EMPTY_FORM = { title: "", date: todayISODate(), startTime: "", endTime: ""
 
 export const SchedulePage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
   const currentUser = authState.type === "authenticated" ? authState.user : null;
 
@@ -169,7 +169,7 @@ export const SchedulePage: React.FC = () => {
                     <td className="border-b border-border px-4 py-3 font-medium text-foreground">{entry.title}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.location || "-"}</td>
                     <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                    {isAdmin && (
+                    {canDelete && (
                       <td className="border-b border-border px-4 py-3">
                         <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                           <Trash2 size={16} />
@@ -194,7 +194,7 @@ export const SchedulePage: React.FC = () => {
                     </span>
                     {entry.location && <span className="text-xs text-muted-foreground">{entry.location}</span>}
                   </div>
-                  {isAdmin && (
+                  {canDelete && (
                     <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                       <Trash2 size={16} />
                     </Button>

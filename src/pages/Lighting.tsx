@@ -55,7 +55,7 @@ function costsToRows(costs: LightingCostItem[]): CostRow[] {
 
 export const LightingPage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
   const currentUser = authState.type === "authenticated" ? authState.user : null;
 
@@ -429,7 +429,7 @@ export const LightingPage: React.FC = () => {
                         <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
                           <Pencil size={16} />
                         </Button>
-                        {isAdmin && (
+                        {canDelete && (
                           <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                             <Trash2 size={16} />
                           </Button>
@@ -485,7 +485,7 @@ export const LightingPage: React.FC = () => {
                   <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
                     <Pencil size={16} />
                   </Button>
-                  {isAdmin && (
+                  {canDelete && (
                     <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
                       <Trash2 size={16} />
                     </Button>

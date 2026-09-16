@@ -111,12 +111,13 @@ service cloud.firestore {
     }
 
     // A deletion (soft-delete into Trash Bin, or permanent delete from the
-    // Trash Bin) requested by an Admin but not yet carried out. Only a Super
-    // Admin can act on the queue -- approving performs the real write on the
-    // target record and then removes this doc; rejecting just removes it.
+    // Trash Bin) requested by an Admin or Member but not yet carried out.
+    // Only a Super Admin can act on the queue -- approving performs the
+    // real write on the target record and then removes this doc; rejecting
+    // just removes it.
     match /pendingDeletions/{id} {
       allow get, list: if isAdmin();
-      allow create: if isAdmin() && request.resource.data.requestedBy == request.auth.uid;
+      allow create: if isApproved() && request.resource.data.requestedBy == request.auth.uid;
       allow update: if false;
       allow delete: if isSuperAdmin();
     }

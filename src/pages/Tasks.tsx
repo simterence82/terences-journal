@@ -38,7 +38,7 @@ const PRIORITY_OPTIONS = [
 
 export const TasksPage: React.FC = () => {
   const { authState } = useAuth();
-  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
+  const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
   const currentUser = authState.type === "authenticated" ? authState.user : null;
 
@@ -224,13 +224,13 @@ export const TasksPage: React.FC = () => {
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">{openTasks.length} open of {tasks.length} total</p>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && visibleTasks.length > 0 && (
+          {canDelete && visibleTasks.length > 0 && (
             <label className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-muted-foreground">
               <Checkbox checked={allVisibleSelected} onChange={toggleSelectAll} aria-label="Select all" />
               Select All
             </label>
           )}
-          {isAdmin && selected.size > 0 && (
+          {canDelete && selected.size > 0 && (
             <Button variant="destructive" onClick={() => setIsBulkDeleteOpen(true)}>
               <Trash2 size={16} /> Delete Selected ({selected.size})
             </Button>
@@ -352,7 +352,7 @@ export const TasksPage: React.FC = () => {
           {visibleTasks.map((task) => (
             <div key={task.id} className={`flex flex-col gap-3 rounded-lg border border-border bg-card p-5 shadow transition-shadow hover:shadow-md ${task.done ? "opacity-60" : ""}`}>
               <div className="flex items-center gap-3">
-                {isAdmin && (
+                {canDelete && (
                   <label className="flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
                     <Checkbox checked={selected.has(task.id)} onChange={() => toggleSelected(task.id)} aria-label={`Select ${task.title}`} />
                     Select
@@ -380,7 +380,7 @@ export const TasksPage: React.FC = () => {
                   <Button variant="ghost" size="icon" onClick={() => openEdit(task)} aria-label="Edit task">
                     <Pencil size={16} />
                   </Button>
-                  {isAdmin && (
+                  {canDelete && (
                     <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(task)} aria-label="Delete task">
                       <Trash2 size={16} />
                     </Button>
