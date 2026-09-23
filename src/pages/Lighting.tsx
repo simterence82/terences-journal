@@ -17,6 +17,7 @@ import { Checkbox } from "../components/Checkbox";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import { Tabs } from "../components/Tabs";
 import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
 import type { LightingCostItem, LightingPurchase } from "../lib/types";
 
@@ -74,12 +75,17 @@ export const LightingPage: React.FC = () => {
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [editCostRows, setEditCostRows] = useState<CostRow[]>([{ ...EMPTY_COST_ROW }]);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [statusTab, setStatusTab] = useState<"outstanding" | "completed">("outstanding");
 
   const entries = listQuery.data ?? [];
   const profitOf = (e: LightingPurchase) => e.selling - e.cost - e.commissionGiven;
   const totalProfit = entries.reduce((sum, e) => sum + profitOf(e), 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
   const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
+  const isFullyDone = (e: LightingPurchase) => e.paidToSeller && e.reimbursed;
+  const outstandingEntries = entries.filter((e) => !isFullyDone(e));
+  const completedEntries = entries.filter(isFullyDone);
+  const visibleEntries = statusTab === "outstanding" ? outstandingEntries : completedEntries;
 
   const setField = (key: keyof typeof EMPTY_FORM) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const resetForm = () => {
@@ -374,6 +380,15 @@ export const LightingPage: React.FC = () => {
         <SummaryCard label="Pending Claims" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
       </div>
 
+      <Tabs
+        value={statusTab}
+        onValueChange={(v) => setStatusTab(v as "outstanding" | "completed")}
+        options={[
+          { value: "outstanding", label: "Outstanding", count: outstandingEntries.length },
+          { value: "completed", label: "Completed", count: completedEntries.length },
+        ]}
+      />
+
       {listQuery.isLoading ? (
         <div className="rounded-lg border border-border bg-card p-6 shadow">
           <Skeleton style={{ height: 200 }} />
@@ -381,6 +396,13 @@ export const LightingPage: React.FC = () => {
       ) : entries.length === 0 ? (
         <div className="rounded-lg border border-border bg-card shadow">
           <EmptyState icon={<Lightbulb size={28} />} message="No lighting purchases recorded yet." />
+        </div>
+      ) : visibleEntries.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card shadow">
+          <EmptyState
+            icon={<Lightbulb size={28} />}
+            message={statusTab === "outstanding" ? "No outstanding entries." : "No completed entries yet."}
+          />
         </div>
       ) : (
         <>
@@ -401,7 +423,7 @@ export const LightingPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => (
+                {visibleEntries.map((entry) => (
                   <tr key={entry.id} className="cursor-pointer hover:bg-surface" onClick={() => openEdit(entry)}>
                     <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.brand}</td>
@@ -443,7 +465,7 @@ export const LightingPage: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-3 md:hidden">
-            {entries.map((entry) => (
+            {visibleEntries.map((entry) => (
               <div key={entry.id} className="cursor-pointer rounded-lg border border-border bg-card p-4 shadow" onClick={() => openEdit(entry)}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-col">
