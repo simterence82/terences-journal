@@ -170,10 +170,18 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // Unlike the other record collections, editing an existing schedule
+    // entry (not creating one -- the PA still logs meetings freely) is
+    // Admin-tier only, not any approved user.
+    function canEditSchedule() {
+      return isAdmin() &&
+        (!touchesDeletionFields() || (isRestoring() ? isAdmin() : isSuperAdmin()));
+    }
+
     match /scheduleEvents/{id} {
       allow get, list: if isApproved();
       allow create: if isApproved();
-      allow update: if canEditRecord();
+      allow update: if canEditSchedule();
       allow delete: if isSuperAdmin();
     }
 

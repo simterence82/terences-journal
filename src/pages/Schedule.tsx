@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Plus, Trash2, CalendarClock } from "lucide-react";
+import { Plus, Trash2, Pencil, CalendarClock } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
-import { useScheduleList, useCreateSchedule, useDeleteSchedule } from "../hooks/useSchedule";
+import { useScheduleList, useCreateSchedule, useUpdateSchedule, useDeleteSchedule } from "../hooks/useSchedule";
 import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { useAuth } from "../lib/AuthContext";
 import { todayISODate } from "../lib/date";
@@ -12,6 +12,7 @@ import { Textarea } from "../components/Textarea";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import type { ScheduleEvent } from "../lib/types";
 
 const EMPTY_FORM = { title: "", date: todayISODate(), startTime: "", endTime: "", location: "", notes: "" };
 
@@ -19,16 +20,20 @@ export const SchedulePage: React.FC = () => {
   const { authState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const canEdit = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
   const currentUser = authState.type === "authenticated" ? authState.user : null;
 
   const listQuery = useScheduleList();
   const createMutation = useCreateSchedule();
+  const updateMutation = useUpdateSchedule();
   const deleteMutation = useDeleteSchedule();
   const requestDeletionMutation = useRequestDeletion();
   const deleteTarget = useConfirmDialog<{ id: string; title: string; date: string }>();
 
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingEntry, setEditingEntry] = useState<ScheduleEvent | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
 
   const entries = listQuery.data ?? [];
   const setField = (key: keyof typeof EMPTY_FORM) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -56,6 +61,45 @@ export const SchedulePage: React.FC = () => {
           setIsOpen(false);
         },
         onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add entry"),
+      }
+    );
+  };
+
+  const openEdit = (entry: ScheduleEvent) => {
+    setEditingEntry(entry);
+    setEditForm({
+      title: entry.title,
+      date: entry.date.slice(0, 10),
+      startTime: entry.startTime ?? "",
+      endTime: entry.endTime ?? "",
+      location: entry.location ?? "",
+      notes: entry.notes ?? "",
+    });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+    if (!editForm.title || !editForm.date) {
+      toast.error("Title and date are required");
+      return;
+    }
+    updateMutation.mutate(
+      {
+        id: editingEntry.id,
+        title: editForm.title,
+        date: editForm.date,
+        startTime: editForm.startTime || null,
+        endTime: editForm.endTime || null,
+        location: editForm.location || null,
+        notes: editForm.notes || null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Schedule entry updated");
+          setEditingEntry(null);
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update entry"),
       }
     );
   };
@@ -138,6 +182,45 @@ export const SchedulePage: React.FC = () => {
         </form>
       </Dialog>
 
+      <Dialog open={editingEntry !== null} onOpenChange={(open) => !open && setEditingEntry(null)}>
+        <DialogHeader>
+          <DialogTitle>Edit Schedule Entry</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Title *</label>
+            <Input value={editForm.title} onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))} required placeholder="e.g. Client meeting" />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
+              <Input type="date" value={editForm.date} onChange={(e) => setEditForm((p) => ({ ...p, date: e.target.value }))} required />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Start Time</label>
+              <Input type="time" value={editForm.startTime} onChange={(e) => setEditForm((p) => ({ ...p, startTime: e.target.value }))} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">End Time</label>
+              <Input type="time" value={editForm.endTime} onChange={(e) => setEditForm((p) => ({ ...p, endTime: e.target.value }))} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Location</label>
+            <Input value={editForm.location} onChange={(e) => setEditForm((p) => ({ ...p, location: e.target.value }))} placeholder="e.g. Level 12 Boardroom" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
+            <Textarea value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} rows={3} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </Dialog>
+
       {listQuery.isLoading ? (
         <div className="rounded-lg border border-border bg-card p-6 shadow">
           <Skeleton style={{ height: 200 }} />
@@ -169,11 +252,20 @@ export const SchedulePage: React.FC = () => {
                     <td className="border-b border-border px-4 py-3 font-medium text-foreground">{entry.title}</td>
                     <td className="border-b border-border px-4 py-3 text-foreground">{entry.location || "-"}</td>
                     <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                    {canDelete && (
+                    {(canEdit || canDelete) && (
                       <td className="border-b border-border px-4 py-3">
-                        <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
-                          <Trash2 size={16} />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          {canEdit && (
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
+                              <Pencil size={16} />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
+                              <Trash2 size={16} />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -194,11 +286,18 @@ export const SchedulePage: React.FC = () => {
                     </span>
                     {entry.location && <span className="text-xs text-muted-foreground">{entry.location}</span>}
                   </div>
-                  {canDelete && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
-                      <Trash2 size={16} />
-                    </Button>
-                  )}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {canEdit && (
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
+                        <Pencil size={16} />
+                      </Button>
+                    )}
+                    {canDelete && (
+                      <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
+                        <Trash2 size={16} />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {entry.notes && <p className="mt-2 border-t border-border pt-2 text-xs text-muted-foreground">{entry.notes}</p>}
               </div>
