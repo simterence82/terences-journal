@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Plus, X, Trash2, Pencil, Lightbulb, DollarSign, Clock, RotateCcw } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
-import { useLightingList, useCreateLighting, useUpdateLighting, useDeleteLighting } from "../hooks/useLighting";
+import { useLightingList, useLightingFinancialsList, useCreateLighting, useUpdateLighting, useDeleteLighting } from "../hooks/useLighting";
 import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
@@ -19,7 +19,7 @@ import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 import { Tabs } from "../components/Tabs";
 import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
-import type { LightingCostItem, LightingPurchase } from "../lib/types";
+import type { LightingCostItem, LightingFinancials, LightingPurchase } from "../lib/types";
 
 const EMPTY_FORM = {
   brand: "",
@@ -38,6 +38,7 @@ interface CostRow {
   amount: string;
 }
 const EMPTY_COST_ROW: CostRow = { vendor: "", amount: "" };
+const EMPTY_FINANCIALS: Omit<LightingFinancials, "id"> = { costs: [], cost: 0, selling: 0, commissionGiven: 0, commissionRecipient: null };
 
 function costRowsTotal(rows: CostRow[]): number {
   return rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
@@ -60,7 +61,13 @@ export const LightingPage: React.FC = () => {
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
   const currentUser = authState.type === "authenticated" ? authState.user : null;
 
+  // Cost/selling/profit/commission live in a separate Firestore collection
+  // that only a Super Admin can read (see useLighting.ts) -- Admin's view of
+  // this page never fetches, computes, or renders any of it.
   const listQuery = useLightingList();
+  const financialsQuery = useLightingFinancialsList(isSuperAdmin);
+  const financialsById = new Map((financialsQuery.data ?? []).map((f) => [f.id, f]));
+
   const lookupsQuery = useLookups();
   const createMutation = useCreateLighting();
   const updateMutation = useUpdateLighting();
@@ -78,10 +85,15 @@ export const LightingPage: React.FC = () => {
   const [statusTab, setStatusTab] = useState<"outstanding" | "completed">("outstanding");
 
   const entries = listQuery.data ?? [];
-  const profitOf = (e: LightingPurchase) => e.selling - e.cost - e.commissionGiven;
+  const profitOf = (e: LightingPurchase) => {
+    const f = financialsById.get(e.id) ?? EMPTY_FINANCIALS;
+    return f.selling - f.cost - f.commissionGiven;
+  };
   const totalProfit = entries.reduce((sum, e) => sum + profitOf(e), 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
   const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
+  // Paid/Claimed are operational fields -- this split works identically for
+  // Admin and Super Admin, no financial data needed to know what's settled.
   const isFullyDone = (e: LightingPurchase) => e.paidToSeller && e.reimbursed;
   const outstandingEntries = entries.filter((e) => !isFullyDone(e));
   const completedEntries = entries.filter(isFullyDone);
@@ -135,17 +147,18 @@ export const LightingPage: React.FC = () => {
 
   const openEdit = (entry: LightingPurchase) => {
     setEditingEntry(entry);
+    const f = financialsById.get(entry.id) ?? EMPTY_FINANCIALS;
     setEditForm({
       brand: entry.brand,
       clientName: entry.clientName,
       address: entry.address,
       date: entry.date.slice(0, 10),
-      commissionGiven: entry.commissionGiven.toFixed(2),
-      commissionRecipient: entry.commissionRecipient ?? "",
-      selling: entry.selling.toFixed(2),
+      commissionGiven: f.commissionGiven.toFixed(2),
+      commissionRecipient: f.commissionRecipient ?? "",
+      selling: f.selling.toFixed(2),
       notes: entry.notes ?? "",
     });
-    setEditCostRows(costsToRows(entry.costs));
+    setEditCostRows(costsToRows(f.costs));
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -156,18 +169,29 @@ export const LightingPage: React.FC = () => {
       return;
     }
     updateMutation.mutate(
-      {
-        id: editingEntry.id,
-        brand: editForm.brand,
-        clientName: editForm.clientName,
-        address: editForm.address,
-        date: editForm.date,
-        commissionGiven: Number(editForm.commissionGiven) || 0,
-        commissionRecipient: editForm.commissionRecipient || null,
-        costs: buildCosts(editCostRows),
-        selling: Number(editForm.selling) || 0,
-        notes: editForm.notes || null,
-      },
+      isSuperAdmin
+        ? {
+            id: editingEntry.id,
+            brand: editForm.brand,
+            clientName: editForm.clientName,
+            address: editForm.address,
+            date: editForm.date,
+            commissionGiven: Number(editForm.commissionGiven) || 0,
+            commissionRecipient: editForm.commissionRecipient || null,
+            costs: buildCosts(editCostRows),
+            selling: Number(editForm.selling) || 0,
+            notes: editForm.notes || null,
+          }
+        : {
+            // Admin's edit dialog never shows financial fields, so never
+            // submit them -- this only ever touches lightingPurchases.
+            id: editingEntry.id,
+            brand: editForm.brand,
+            clientName: editForm.clientName,
+            address: editForm.address,
+            date: editForm.date,
+            notes: editForm.notes || null,
+          },
       {
         onSuccess: () => {
           toast.success("Lighting purchase updated");
@@ -205,6 +229,10 @@ export const LightingPage: React.FC = () => {
     }
   };
 
+  const tableHeaders = isSuperAdmin
+    ? ["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Notes", "Paid", "Claimed", ""]
+    : ["Date", "Brand", "Client", "Address", "Notes", "Paid", "Claimed", ""];
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -212,88 +240,90 @@ export const LightingPage: React.FC = () => {
           <h1 className="font-display text-3xl font-semibold text-foreground">Smart Lighting Purchases</h1>
           <p className="mt-1 text-[0.9375rem] text-muted-foreground">Track lighting jobs, commissions, and claims</p>
         </div>
-        <Button
-          onClick={() => setIsOpen(true)}
-        >
-          <Plus size={16} /> Add Entry
-        </Button>
+        {isSuperAdmin && (
+          <Button onClick={() => setIsOpen(true)}>
+            <Plus size={16} /> Add Entry
+          </Button>
+        )}
       </div>
 
-      <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
-        <DialogHeader>
-          <DialogTitle>Add Smart Product Purchase</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={form.brand} onChange={setField("brand")} />
-          <AutoCompleteField label="Client Name" required options={lookupsQuery.data?.clientNames ?? []} value={form.clientName} onChange={setField("clientName")} />
-          <AutoCompleteField label="Address" required options={lookupsQuery.data?.addresses ?? []} value={form.address} onChange={setField("address")} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
-              <Input type="date" value={form.date} onChange={(e) => setField("date")(e.target.value)} required />
+      {isSuperAdmin && (
+        <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
+          <DialogHeader>
+            <DialogTitle>Add Smart Product Purchase</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={form.brand} onChange={setField("brand")} />
+            <AutoCompleteField label="Client Name" required options={lookupsQuery.data?.clientNames ?? []} value={form.clientName} onChange={setField("clientName")} />
+            <AutoCompleteField label="Address" required options={lookupsQuery.data?.addresses ?? []} value={form.address} onChange={setField("address")} />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
+                <Input type="date" value={form.date} onChange={(e) => setField("date")(e.target.value)} required />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-foreground">Commission Given (S$)</label>
+                <Input type="number" min="0" step="0.01" value={form.commissionGiven} onChange={(e) => setField("commissionGiven")(e.target.value)} placeholder="0.00" />
+              </div>
             </div>
+            <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={form.commissionRecipient} onChange={setField("commissionRecipient")} />
             <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-foreground">Commission Given (S$)</label>
-              <Input type="number" min="0" step="0.01" value={form.commissionGiven} onChange={(e) => setField("commissionGiven")(e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-          <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={form.commissionRecipient} onChange={setField("commissionRecipient")} />
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="text-[0.8125rem] font-medium text-foreground">Costs (S$)</label>
-              <Button type="button" variant="ghost" size="sm" onClick={() => addCostRow(setCostRows)}>
-                <Plus size={14} /> Add Vendor
-              </Button>
-            </div>
-            <div className="flex flex-col gap-2">
-              {costRows.map((row, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="grid flex-1 grid-cols-2 gap-2">
-                    <AutoCompleteField
-                      options={lookupsQuery.data?.lightingVendors ?? []}
-                      value={row.vendor}
-                      onChange={(v) => updateCostRow(setCostRows, i, "vendor", v)}
-                      placeholder="Vendor (optional)"
-                    />
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={row.amount}
-                      onChange={(e) => updateCostRow(setCostRows, i, "amount", e.target.value)}
-                    />
+              <div className="flex items-center justify-between">
+                <label className="text-[0.8125rem] font-medium text-foreground">Costs (S$)</label>
+                <Button type="button" variant="ghost" size="sm" onClick={() => addCostRow(setCostRows)}>
+                  <Plus size={14} /> Add Vendor
+                </Button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {costRows.map((row, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <div className="grid flex-1 grid-cols-2 gap-2">
+                      <AutoCompleteField
+                        options={lookupsQuery.data?.lightingVendors ?? []}
+                        value={row.vendor}
+                        onChange={(v) => updateCostRow(setCostRows, i, "vendor", v)}
+                        placeholder="Vendor (optional)"
+                      />
+                      <Input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={row.amount}
+                        onChange={(e) => updateCostRow(setCostRows, i, "amount", e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeCostRow(setCostRows, i)}
+                      disabled={costRows.length === 1}
+                      aria-label="Remove cost"
+                    >
+                      <X size={16} />
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeCostRow(setCostRows, i)}
-                    disabled={costRows.length === 1}
-                    aria-label="Remove cost"
-                  >
-                    <X size={16} />
-                  </Button>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="text-right text-xs text-muted-foreground">Total cost: {formatSGD(costRowsTotal(costRows))}</div>
             </div>
-            <div className="text-right text-xs text-muted-foreground">Total cost: {formatSGD(costRowsTotal(costRows))}</div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
-            <Input type="number" min="0" step="0.01" value={form.selling} onChange={(e) => setField("selling")(e.target.value)} placeholder="0.00" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
-            <Textarea value={form.notes} onChange={(e) => setField("notes")(e.target.value)} rows={3} />
-          </div>
-          <DialogFooter>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Saving..." : "Save Entry"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </Dialog>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
+              <Input type="number" min="0" step="0.01" value={form.selling} onChange={(e) => setField("selling")(e.target.value)} placeholder="0.00" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
+              <Textarea value={form.notes} onChange={(e) => setField("notes")(e.target.value)} rows={3} />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={createMutation.isPending}>
+                {createMutation.isPending ? "Saving..." : "Save Entry"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Dialog>
+      )}
 
       <Dialog open={editingEntry !== null} onOpenChange={(open) => !open && setEditingEntry(null)}>
         <DialogHeader>
@@ -303,62 +333,72 @@ export const LightingPage: React.FC = () => {
           <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={editForm.brand} onChange={setEditField("brand")} />
           <AutoCompleteField label="Client Name" required options={lookupsQuery.data?.clientNames ?? []} value={editForm.clientName} onChange={setEditField("clientName")} />
           <AutoCompleteField label="Address" required options={lookupsQuery.data?.addresses ?? []} value={editForm.address} onChange={setEditField("address")} />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {isSuperAdmin && (
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
+                  <Input type="date" value={editForm.date} onChange={(e) => setEditField("date")(e.target.value)} required />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-[0.8125rem] font-medium text-foreground">Commission Given (S$)</label>
+                  <Input type="number" min="0" step="0.01" value={editForm.commissionGiven} onChange={(e) => setEditField("commissionGiven")(e.target.value)} placeholder="0.00" />
+                </div>
+              </div>
+              <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={editForm.commissionRecipient} onChange={setEditField("commissionRecipient")} />
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[0.8125rem] font-medium text-foreground">Costs (S$)</label>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => addCostRow(setEditCostRows)}>
+                    <Plus size={14} /> Add Vendor
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {editCostRows.map((row, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="grid flex-1 grid-cols-2 gap-2">
+                        <AutoCompleteField
+                          options={lookupsQuery.data?.lightingVendors ?? []}
+                          value={row.vendor}
+                          onChange={(v) => updateCostRow(setEditCostRows, i, "vendor", v)}
+                          placeholder="Vendor (optional)"
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={row.amount}
+                          onChange={(e) => updateCostRow(setEditCostRows, i, "amount", e.target.value)}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeCostRow(setEditCostRows, i)}
+                        disabled={editCostRows.length === 1}
+                        aria-label="Remove cost"
+                      >
+                        <X size={16} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-right text-xs text-muted-foreground">Total cost: {formatSGD(costRowsTotal(editCostRows))}</div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
+                <Input type="number" min="0" step="0.01" value={editForm.selling} onChange={(e) => setEditField("selling")(e.target.value)} placeholder="0.00" />
+              </div>
+            </>
+          )}
+          {!isSuperAdmin && (
             <div className="flex flex-col gap-2">
               <label className="text-[0.8125rem] font-medium text-foreground">Date *</label>
               <Input type="date" value={editForm.date} onChange={(e) => setEditField("date")(e.target.value)} required />
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-[0.8125rem] font-medium text-foreground">Commission Given (S$)</label>
-              <Input type="number" min="0" step="0.01" value={editForm.commissionGiven} onChange={(e) => setEditField("commissionGiven")(e.target.value)} placeholder="0.00" />
-            </div>
-          </div>
-          <AutoCompleteField label="Commission Recipient" options={lookupsQuery.data?.commissionRecipients ?? []} value={editForm.commissionRecipient} onChange={setEditField("commissionRecipient")} />
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="text-[0.8125rem] font-medium text-foreground">Costs (S$)</label>
-              <Button type="button" variant="ghost" size="sm" onClick={() => addCostRow(setEditCostRows)}>
-                <Plus size={14} /> Add Vendor
-              </Button>
-            </div>
-            <div className="flex flex-col gap-2">
-              {editCostRows.map((row, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <div className="grid flex-1 grid-cols-2 gap-2">
-                    <AutoCompleteField
-                      options={lookupsQuery.data?.lightingVendors ?? []}
-                      value={row.vendor}
-                      onChange={(v) => updateCostRow(setEditCostRows, i, "vendor", v)}
-                      placeholder="Vendor (optional)"
-                    />
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      value={row.amount}
-                      onChange={(e) => updateCostRow(setEditCostRows, i, "amount", e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeCostRow(setEditCostRows, i)}
-                    disabled={editCostRows.length === 1}
-                    aria-label="Remove cost"
-                  >
-                    <X size={16} />
-                  </Button>
-                </div>
-              ))}
-            </div>
-            <div className="text-right text-xs text-muted-foreground">Total cost: {formatSGD(costRowsTotal(editCostRows))}</div>
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-foreground">Selling Price (S$)</label>
-            <Input type="number" min="0" step="0.01" value={editForm.selling} onChange={(e) => setEditField("selling")(e.target.value)} placeholder="0.00" />
-          </div>
+          )}
           <div className="flex flex-col gap-2">
             <label className="text-[0.8125rem] font-medium text-foreground">Notes</label>
             <Textarea value={editForm.notes} onChange={(e) => setEditField("notes")(e.target.value)} rows={3} />
@@ -371,11 +411,13 @@ export const LightingPage: React.FC = () => {
         </form>
       </Dialog>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${isSuperAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         <SummaryCard label="Total Entries" value={entries.length} icon={<Lightbulb size={18} />} />
-        <button type="button" onClick={() => setIsSummaryOpen(true)} className="block w-full text-left">
-          <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} sublabel="View summary report" icon={<DollarSign size={18} />} />
-        </button>
+        {isSuperAdmin && (
+          <button type="button" onClick={() => setIsSummaryOpen(true)} className="block w-full text-left">
+            <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} sublabel="View summary report" icon={<DollarSign size={18} />} />
+          </button>
+        )}
         <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
         <SummaryCard label="Pending Claims" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
       </div>
@@ -410,7 +452,7 @@ export const LightingPage: React.FC = () => {
             <table className="w-full whitespace-nowrap text-[0.8125rem]">
               <thead className="bg-surface">
                 <tr>
-                  {["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Notes", "Paid", "Claimed", ""].map((h) => (
+                  {tableHeaders.map((h) => (
                     <th
                       key={h}
                       className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
@@ -423,98 +465,110 @@ export const LightingPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {visibleEntries.map((entry) => (
-                  <tr key={entry.id} className="cursor-pointer hover:bg-surface" onClick={() => openEdit(entry)}>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{entry.brand}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{entry.clientName}</td>
-                    <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.address}</td>
-                    <td
-                      className="border-b border-border px-4 py-3 text-foreground"
-                      title={entry.costs.map((c) => `${c.vendor ?? "Vendor"}: ${formatSGD(c.amount)}`).join(", ")}
-                    >
-                      {formatSGD(entry.cost)}
-                    </td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.selling)}</td>
-                    <td className="border-b border-border px-4 py-3 font-semibold text-success">{formatSGD(profitOf(entry))}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.commissionGiven)}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{entry.commissionRecipient || "-"}</td>
-                    <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                    <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
-                    </td>
-                    <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
-                    </td>
-                    <td className="border-b border-border px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
-                          <Pencil size={16} />
-                        </Button>
-                        {canDelete && (
-                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
-                            <Trash2 size={16} />
+                {visibleEntries.map((entry) => {
+                  const f = financialsById.get(entry.id) ?? EMPTY_FINANCIALS;
+                  return (
+                    <tr key={entry.id} className="cursor-pointer hover:bg-surface" onClick={() => openEdit(entry)}>
+                      <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
+                      <td className="border-b border-border px-4 py-3 text-foreground">{entry.brand}</td>
+                      <td className="border-b border-border px-4 py-3 text-foreground">{entry.clientName}</td>
+                      <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.address}</td>
+                      {isSuperAdmin && (
+                        <>
+                          <td
+                            className="border-b border-border px-4 py-3 text-foreground"
+                            title={f.costs.map((c) => `${c.vendor ?? "Vendor"}: ${formatSGD(c.amount)}`).join(", ")}
+                          >
+                            {formatSGD(f.cost)}
+                          </td>
+                          <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(f.selling)}</td>
+                          <td className="border-b border-border px-4 py-3 font-semibold text-success">{formatSGD(profitOf(entry))}</td>
+                          <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(f.commissionGiven)}</td>
+                          <td className="border-b border-border px-4 py-3 text-foreground">{f.commissionRecipient || "-"}</td>
+                        </>
+                      )}
+                      <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
+                      <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
+                      </td>
+                      <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
+                      </td>
+                      <td className="border-b border-border px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
+                            <Pencil size={16} />
                           </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {canDelete && (
+                            <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
+                              <Trash2 size={16} />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="flex flex-col gap-3 md:hidden">
-            {visibleEntries.map((entry) => (
-              <div key={entry.id} className="cursor-pointer rounded-lg border border-border bg-card p-4 shadow" onClick={() => openEdit(entry)}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate font-medium text-foreground">{entry.brand} &middot; {entry.clientName}</span>
-                    <span className="truncate text-xs text-muted-foreground">{entry.address}</span>
-                    <span className="text-xs text-muted-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</span>
+            {visibleEntries.map((entry) => {
+              const f = financialsById.get(entry.id) ?? EMPTY_FINANCIALS;
+              return (
+                <div key={entry.id} className="cursor-pointer rounded-lg border border-border bg-card p-4 shadow" onClick={() => openEdit(entry)}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate font-medium text-foreground">{entry.brand} &middot; {entry.clientName}</span>
+                      <span className="truncate text-xs text-muted-foreground">{entry.address}</span>
+                      <span className="text-xs text-muted-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</span>
+                    </div>
+                    {isSuperAdmin && <span className="shrink-0 font-semibold text-success">{formatSGD(profitOf(entry))}</span>}
                   </div>
-                  <span className="shrink-0 font-semibold text-success">{formatSGD(profitOf(entry))}</span>
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>Cost: <span className="text-foreground">{formatSGD(entry.cost)}</span></span>
-                  <span>Selling: <span className="text-foreground">{formatSGD(entry.selling)}</span></span>
-                  <span>Commission: <span className="text-foreground">{formatSGD(entry.commissionGiven)}</span></span>
-                  {entry.commissionRecipient && <span>To: <span className="text-foreground">{entry.commissionRecipient}</span></span>}
-                </div>
-                {entry.costs.length > 1 && (
-                  <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
-                    {entry.costs.map((c, i) => (
-                      <span key={i}>{c.vendor || "Vendor"}: <span className="text-foreground">{formatSGD(c.amount)}</span></span>
-                    ))}
-                  </div>
-                )}
-                {entry.notes && <p className="mt-2 text-xs text-muted-foreground">{entry.notes}</p>}
-                <div
-                  className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-foreground"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <label className="flex items-center gap-1.5">
-                    <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} /> Paid
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
-                  </label>
-                </div>
-                <div
-                  className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
-                    <Pencil size={16} />
-                  </Button>
-                  {canDelete && (
-                    <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
-                      <Trash2 size={16} />
-                    </Button>
+                  {isSuperAdmin && (
+                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span>Cost: <span className="text-foreground">{formatSGD(f.cost)}</span></span>
+                      <span>Selling: <span className="text-foreground">{formatSGD(f.selling)}</span></span>
+                      <span>Commission: <span className="text-foreground">{formatSGD(f.commissionGiven)}</span></span>
+                      {f.commissionRecipient && <span>To: <span className="text-foreground">{f.commissionRecipient}</span></span>}
+                    </div>
                   )}
+                  {isSuperAdmin && f.costs.length > 1 && (
+                    <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground">
+                      {f.costs.map((c, i) => (
+                        <span key={i}>{c.vendor || "Vendor"}: <span className="text-foreground">{formatSGD(c.amount)}</span></span>
+                      ))}
+                    </div>
+                  )}
+                  {entry.notes && <p className="mt-2 text-xs text-muted-foreground">{entry.notes}</p>}
+                  <div
+                    className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-3 text-xs text-foreground"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <label className="flex items-center gap-1.5">
+                      <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} /> Paid
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
+                    </label>
+                  </div>
+                  <div
+                    className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
+                      <Pencil size={16} />
+                    </Button>
+                    {canDelete && (
+                      <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(entry)} aria-label="Delete entry">
+                        <Trash2 size={16} />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -531,33 +585,35 @@ export const LightingPage: React.FC = () => {
         onConfirm={handleDelete}
       />
 
-      <SummaryReportDialog
-        open={isSummaryOpen}
-        onOpenChange={setIsSummaryOpen}
-        title="Smart Lighting Summary"
-        entries={entries}
-        getDate={(e) => e.date}
-        renderStats={(filtered) => {
-          const cost = filtered.reduce((sum, e) => sum + e.cost, 0);
-          const selling = filtered.reduce((sum, e) => sum + e.selling, 0);
-          const commission = filtered.reduce((sum, e) => sum + e.commissionGiven, 0);
-          const paid = filtered.filter((e) => e.paidToSeller).length;
-          const claimed = filtered.filter((e) => e.reimbursed).length;
-          return (
-            <div className="grid grid-cols-2 gap-2">
-              <StatRow label="Total Entries" value={filtered.length} />
-              <StatRow label="Total Profit" value={formatSGD(selling - cost - commission)} />
-              <StatRow label="Total Cost" value={formatSGD(cost)} />
-              <StatRow label="Total Selling" value={formatSGD(selling)} />
-              <StatRow label="Total Commission" value={formatSGD(commission)} />
-              <StatRow label="Paid" value={`${paid} / ${filtered.length}`} />
-              <StatRow label="Pending Payment" value={filtered.length - paid} />
-              <StatRow label="Claimed" value={`${claimed} / ${filtered.length}`} />
-              <StatRow label="Pending Claims" value={filtered.length - claimed} />
-            </div>
-          );
-        }}
-      />
+      {isSuperAdmin && (
+        <SummaryReportDialog
+          open={isSummaryOpen}
+          onOpenChange={setIsSummaryOpen}
+          title="Smart Lighting Summary"
+          entries={entries}
+          getDate={(e) => e.date}
+          renderStats={(filtered) => {
+            const cost = filtered.reduce((sum, e) => sum + (financialsById.get(e.id) ?? EMPTY_FINANCIALS).cost, 0);
+            const selling = filtered.reduce((sum, e) => sum + (financialsById.get(e.id) ?? EMPTY_FINANCIALS).selling, 0);
+            const commission = filtered.reduce((sum, e) => sum + (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionGiven, 0);
+            const paid = filtered.filter((e) => e.paidToSeller).length;
+            const claimed = filtered.filter((e) => e.reimbursed).length;
+            return (
+              <div className="grid grid-cols-2 gap-2">
+                <StatRow label="Total Entries" value={filtered.length} />
+                <StatRow label="Total Profit" value={formatSGD(selling - cost - commission)} />
+                <StatRow label="Total Cost" value={formatSGD(cost)} />
+                <StatRow label="Total Selling" value={formatSGD(selling)} />
+                <StatRow label="Total Commission" value={formatSGD(commission)} />
+                <StatRow label="Paid" value={`${paid} / ${filtered.length}`} />
+                <StatRow label="Pending Payment" value={filtered.length - paid} />
+                <StatRow label="Claimed" value={`${claimed} / ${filtered.length}`} />
+                <StatRow label="Pending Claims" value={filtered.length - claimed} />
+              </div>
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

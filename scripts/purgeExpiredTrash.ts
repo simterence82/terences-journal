@@ -14,6 +14,9 @@ const db = getFirestore();
 const RETENTION_DAYS = 60;
 const COLLECTIONS = ["lightingPurchases", "blumPurchases", "tasks", "issues", "scheduleEvents"];
 const FILE_COLLECTION_BY_KIND: Record<string, string> = { tasks: "taskFiles", issues: "issueFiles" };
+// Sibling doc (same id) that's always deleted alongside the parent, not
+// conditional on a flag like the file collections above.
+const SIBLING_COLLECTION_BY_KIND: Record<string, string> = { lightingPurchases: "lightingFinancials" };
 
 async function purgeExpiredTrash() {
   const cutoffMs = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -34,6 +37,13 @@ async function purgeExpiredTrash() {
         if (doc.data().hasFile) {
           await db.collection(fileCollection).doc(doc.id).delete();
         }
+      }
+    }
+
+    const siblingCollection = SIBLING_COLLECTION_BY_KIND[collectionName];
+    if (siblingCollection) {
+      for (const doc of expired) {
+        await db.collection(siblingCollection).doc(doc.id).delete();
       }
     }
 

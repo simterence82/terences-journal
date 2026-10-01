@@ -35,24 +35,37 @@ export interface LightingCostItem {
   amount: number;
 }
 
+// Operational fields only -- readable by any approved user (Admin included).
+// Cost/selling/profit/commission live in a SEPARATE Firestore document
+// (LightingFinancials, collection "lightingFinancials") so Firestore's
+// per-document security rules can actually keep Admin from reading them --
+// Firestore has no field-level security, so splitting the document is the
+// only way to make this a real restriction and not just a hidden UI column.
 export interface LightingPurchase {
   id: string;
   brand: string;
   clientName: string;
   address: string;
   date: string;
-  commissionGiven: number;
-  commissionRecipient: string | null;
-  costs: LightingCostItem[];
-  /** Sum of costs[].amount, kept alongside the breakdown for quick profit math. */
-  cost: number;
-  selling: number;
   paidToSeller: boolean;
   reimbursed: boolean;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
 }
+
+// Super Admin only. See the comment on LightingPurchase above.
+export interface LightingFinancials {
+  id: string;
+  commissionGiven: number;
+  commissionRecipient: string | null;
+  costs: LightingCostItem[];
+  /** Sum of costs[].amount, kept alongside the breakdown for quick profit math. */
+  cost: number;
+  selling: number;
+}
+
+export type LightingPurchaseFull = LightingPurchase & Omit<LightingFinancials, "id">;
 
 export interface BlumPurchase {
   id: string;

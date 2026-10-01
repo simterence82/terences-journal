@@ -142,11 +142,24 @@ service cloud.firestore {
         (!touchesDeletionFields() || (isRestoring() ? isAdmin() : isSuperAdmin()));
     }
 
+    // Smart Lighting purchases are split across two documents with the
+    // same id: this one holds everything an Admin is allowed to see
+    // (brand/client/address/date/notes/paid/claimed); cost, selling price,
+    // profit, and commission live only in lightingFinancials below, which
+    // only a Super Admin can read at all. Firestore has no field-level
+    // security -- a single shared document could only ever be hidden in
+    // the UI, not actually kept from Admin, so the split is required for
+    // this to be a real restriction.
     match /lightingPurchases/{id} {
       allow get, list: if isApproved();
-      allow create: if isApproved();
+      allow create: if isSuperAdmin();
       allow update: if canEditRecord();
       allow delete: if isSuperAdmin();
+    }
+
+    match /lightingFinancials/{id} {
+      allow get, list: if isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /blumPurchases/{id} {

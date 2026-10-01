@@ -80,6 +80,7 @@ export const usePermanentDeleteTrashItem = () =>
       await deleteDoc(doc(db, COLLECTION_BY_KIND[kind], id));
       if (kind === "tasks") await deleteDoc(doc(db, "taskFiles", id));
       if (kind === "issues") await deleteDoc(doc(db, "issueFiles", id));
+      if (kind === "lighting") await deleteDoc(doc(db, "lightingFinancials", id));
       return { success: true as const };
     },
   });

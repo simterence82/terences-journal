@@ -8,12 +8,19 @@ import { onSnapshot, type Query } from "firebase/firestore";
 export function useCollectionQuery<T>(
   buildQuery: () => Query,
   mapDoc: (id: string, data: Record<string, any>) => T,
-  sortFn: (a: T, b: T) => number
+  sortFn: (a: T, b: T) => number,
+  options?: { enabled?: boolean }
 ): { data: T[] | undefined; isLoading: boolean; error: Error | null } {
+  const enabled = options?.enabled ?? true;
   const [data, setData] = useState<T[] | undefined>(undefined);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    // Some collections (e.g. lightingFinancials) are only readable by
+    // certain roles -- skip subscribing entirely when the caller knows the
+    // current user has no access, instead of letting every page load
+    // attempt (and fail) a doomed listener.
+    if (!enabled) return;
     const unsubscribe = onSnapshot(
       buildQuery(),
       (snap) => {
@@ -25,9 +32,9 @@ export function useCollectionQuery<T>(
     );
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [enabled]);
 
-  return { data, isLoading: data === undefined && error === null, error };
+  return { data, isLoading: enabled && data === undefined && error === null, error };
 }
 
 interface CollectionSource<T> {

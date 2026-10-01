@@ -9,6 +9,7 @@
     "purge": "tsx scripts/purgeExpiredTrash.ts",
     "cleanup-users": "tsx scripts/cleanupDeletedUsers.ts",
     "cleanup-cloudinary": "tsx scripts/cleanupOrphanedCloudinaryFiles.ts",
+    "migrate-lighting-financials": "tsx scripts/migrateLightingFinancials.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
