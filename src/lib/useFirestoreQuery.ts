@@ -40,7 +40,10 @@ export function useCollectionQuery<T>(
 interface CollectionSource<T> {
   key: string;
   buildQuery: () => Query;
-  mapDoc: (id: string, data: Record<string, any>) => T;
+  // Returns an array so one Firestore doc can fan out into zero or more rows
+  // (e.g. a task with several attachments becomes one Files Archive row per
+  // attachment) -- a source with exactly one row per doc just returns [item].
+  mapDoc: (id: string, data: Record<string, any>) => T[];
 }
 
 // Same idea, but merges live listeners across several collections into one
@@ -57,7 +60,7 @@ export function useMultiCollectionQuery<T>(
       onSnapshot(
         source.buildQuery(),
         (snap) => {
-          const items = snap.docs.map((d) => source.mapDoc(d.id, d.data()));
+          const items = snap.docs.flatMap((d) => source.mapDoc(d.id, d.data()));
           setDataByKey((prev) => ({ ...prev, [source.key]: items }));
         },
         (err) => setError(err as Error)

@@ -82,6 +82,13 @@ export interface BlumPurchase {
 
 export type TaskPriority = "low" | "medium" | "high";
 
+export interface TaskAttachment {
+  fileName: string;
+  fileType: string;
+  fileUrl: string;
+  publicId: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -90,10 +97,7 @@ export interface Task {
   priority: TaskPriority;
   done: boolean;
   assignedTo: string | null;
-  fileName: string | null;
-  fileType: string | null;
-  /** Cloudinary delivery URL. Null for legacy attachments stored as base64 in taskFiles/{id}. */
-  fileUrl: string | null;
+  attachments: TaskAttachment[];
   createdBy: string | null;
   createdAt: string;
 }
@@ -141,6 +145,8 @@ export interface TrashItem {
 export interface FileArchiveItem {
   kind: "tasks" | "issues";
   id: string;
+  /** Identifies one attachment within a task's attachments[] array. Null for issues (still single-file). */
+  publicId: string | null;
   sourceTitle: string;
   fileName: string;
   fileType: string | null;

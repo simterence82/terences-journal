@@ -250,7 +250,7 @@ export const IssuesPage: React.FC = () => {
                 <Button type="button" variant="ghost" size="sm" onClick={() => setFile(null)}>Remove</Button>
               </div>
             ) : (
-              <FileDropzone accept={ACCEPTED_TYPES} onFileSelected={setFile} />
+              <FileDropzone accept={ACCEPTED_TYPES} onFilesSelected={(files) => setFile(files[0] ?? null)} />
             )}
           </div>
           <DialogFooter>

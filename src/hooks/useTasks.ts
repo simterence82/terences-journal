@@ -1,8 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
 import {
   addDoc,
+  arrayUnion,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   query,
@@ -14,7 +14,7 @@ import { auth, db } from "../lib/firebase";
 import { cloudinaryDownloadUrl, uploadToCloudinary } from "../lib/cloudinary";
 import { compareNullableAsc, toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
-import type { Task, TaskPriority } from "../lib/types";
+import type { Task, TaskAttachment, TaskPriority } from "../lib/types";
 
 const COLLECTION = "tasks";
 // Legacy sibling collection: attachments uploaded before the Cloudinary
@@ -30,9 +30,7 @@ function toTask(id: string, data: Record<string, any>): Task {
     priority: data.priority,
     done: data.done,
     assignedTo: data.assignedTo,
-    fileName: data.fileName,
-    fileType: data.fileType,
-    fileUrl: data.fileUrl ?? null,
+    attachments: Array.isArray(data.attachments) ? data.attachments : [],
     createdBy: data.createdBy,
     createdAt: toIso(data.createdAt),
   };
@@ -56,13 +54,22 @@ export interface TaskCreateInput {
   dueDate: string | null;
   priority: TaskPriority;
   assignedTo: string | null;
-  file?: File | null;
+  files?: File[];
+}
+
+async function uploadAttachments(files: File[]): Promise<TaskAttachment[]> {
+  return Promise.all(
+    files.map(async (file) => {
+      const { url, publicId } = await uploadToCloudinary(file);
+      return { fileName: file.name, fileType: file.type || "application/octet-stream", fileUrl: url, publicId };
+    })
+  );
 }
 
 export const useCreateTask = () =>
   useMutation({
     mutationFn: async (input: TaskCreateInput) => {
-      const uploaded = input.file ? await uploadToCloudinary(input.file) : null;
+      const attachments = await uploadAttachments(input.files ?? []);
       const ref = await addDoc(collection(db, COLLECTION), {
         title: input.title,
         description: input.description ?? null,
@@ -70,11 +77,8 @@ export const useCreateTask = () =>
         priority: input.priority,
         done: false,
         assignedTo: input.assignedTo ?? null,
-        fileName: input.file?.name ?? null,
-        fileType: input.file ? input.file.type || "application/octet-stream" : null,
-        fileUrl: uploaded?.url ?? null,
-        filePublicId: uploaded?.publicId ?? null,
-        hasFile: !!input.file,
+        attachments,
+        hasFile: attachments.length > 0,
         createdBy: auth.currentUser?.uid ?? null,
         createdAt: serverTimestamp(),
         isDeleted: false,
@@ -120,18 +124,25 @@ export const useDeleteTasks = () =>
     },
   });
 
-/** Removes an attachment from a task without deleting the task itself. Does not delete the Cloudinary asset. */
-export const useRemoveTaskFile = () =>
+/** Uploads and appends one or more attachments to an existing task. */
+export const useAddTaskAttachments = () =>
   useMutation({
-    mutationFn: async (id: string) => {
-      await updateDoc(doc(db, COLLECTION, id), {
-        fileName: null,
-        fileType: null,
-        fileUrl: null,
-        filePublicId: null,
-        hasFile: false,
-      });
-      await deleteDoc(doc(db, LEGACY_FILES_COLLECTION, id));
+    mutationFn: async ({ id, files }: { id: string; files: File[] }) => {
+      const attachments = await uploadAttachments(files);
+      await updateDoc(doc(db, COLLECTION, id), { attachments: arrayUnion(...attachments), hasFile: true });
+      return attachments;
+    },
+  });
+
+/** Removes one attachment from a task without deleting the task itself. Does not delete the Cloudinary asset. */
+export const useRemoveTaskAttachment = () =>
+  useMutation({
+    mutationFn: async ({ id, publicId }: { id: string; publicId: string }) => {
+      const ref = doc(db, COLLECTION, id);
+      const snap = await getDoc(ref);
+      const current: TaskAttachment[] = snap.data()?.attachments ?? [];
+      const attachments = current.filter((a) => a.publicId !== publicId);
+      await updateDoc(ref, { attachments, hasFile: attachments.length > 0 });
       return { success: true as const };
     },
   });

@@ -3,11 +3,12 @@ import { Upload } from "lucide-react";
 
 interface FileDropzoneProps {
   accept?: string;
-  onFileSelected: (file: File) => void;
+  multiple?: boolean;
+  onFilesSelected: (files: File[]) => void;
   className?: string;
 }
 
-export const FileDropzone: React.FC<FileDropzoneProps> = ({ accept, onFileSelected, className = "" }) => {
+export const FileDropzone: React.FC<FileDropzoneProps> = ({ accept, multiple = false, onFilesSelected, className = "" }) => {
   const [isDragging, setIsDragging] = useState(false);
 
   const handleDrag = useCallback((e: React.DragEvent, dragging: boolean) => {
@@ -21,10 +22,10 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({ accept, onFileSelect
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      const file = e.dataTransfer.files?.[0];
-      if (file) onFileSelected(file);
+      const files = Array.from(e.dataTransfer.files ?? []);
+      if (files.length > 0) onFilesSelected(multiple ? files : [files[0]]);
     },
-    [onFileSelected]
+    [onFilesSelected, multiple]
   );
 
   return (
@@ -40,15 +41,16 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({ accept, onFileSelect
       <input
         type="file"
         accept={accept}
+        multiple={multiple}
         className="hidden"
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onFileSelected(file);
+          const files = Array.from(e.target.files ?? []);
+          if (files.length > 0) onFilesSelected(multiple ? files : [files[0]]);
           e.target.value = "";
         }}
       />
       <Upload size={28} className="text-muted-foreground" />
-      <span className="text-sm text-foreground">Click to upload or drag and drop</span>
+      <span className="text-sm text-foreground">Click to upload or drag and drop{multiple ? " (multiple files allowed)" : ""}</span>
       {accept && <span className="text-xs text-muted-foreground">Accepted: {accept}</span>}
     </label>
   );

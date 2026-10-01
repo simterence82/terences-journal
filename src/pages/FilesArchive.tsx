@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Paperclip, Trash2, FolderArchive, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { useFilesArchiveList } from "../hooks/useFilesArchive";
-import { fetchTaskFileBlob, useRemoveTaskFile } from "../hooks/useTasks";
+import { fetchTaskFileBlob, useRemoveTaskAttachment } from "../hooks/useTasks";
 import { fetchIssueFileBlob, useRemoveIssueFile } from "../hooks/useIssues";
 import { useAuth } from "../lib/AuthContext";
 import { Badge } from "../components/Badge";
@@ -14,14 +14,14 @@ import { FilePreviewDialog } from "../components/FilePreviewDialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import type { FileArchiveItem } from "../lib/types";
 
-const fileKey = (f: Pick<FileArchiveItem, "kind" | "id">) => `${f.kind}-${f.id}`;
+const fileKey = (f: Pick<FileArchiveItem, "kind" | "id" | "publicId">) => `${f.kind}-${f.id}-${f.publicId ?? "single"}`;
 
 export const FilesArchivePage: React.FC = () => {
   const { authState } = useAuth();
   const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
 
   const listQuery = useFilesArchiveList();
-  const removeTaskFileMutation = useRemoveTaskFile();
+  const removeTaskAttachmentMutation = useRemoveTaskAttachment();
   const removeIssueFileMutation = useRemoveIssueFile();
   const deleteTarget = useConfirmDialog<FileArchiveItem>();
 
@@ -52,7 +52,9 @@ export const FilesArchivePage: React.FC = () => {
   };
 
   const removeFile = (f: FileArchiveItem) =>
-    f.kind === "tasks" ? removeTaskFileMutation.mutateAsync(f.id) : removeIssueFileMutation.mutateAsync(f.id);
+    f.kind === "tasks" && f.publicId
+      ? removeTaskAttachmentMutation.mutateAsync({ id: f.id, publicId: f.publicId })
+      : removeIssueFileMutation.mutateAsync(f.id);
 
   const handleDelete = async () => {
     if (!deleteTarget.target) return;

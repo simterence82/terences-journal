@@ -36,13 +36,22 @@ interface CloudinaryAsset {
 
 async function collectInUsePublicIds(): Promise<Set<string>> {
   const ids = new Set<string>();
-  for (const collectionName of ["tasks", "issues"]) {
-    const snap = await db.collection(collectionName).get();
-    for (const doc of snap.docs) {
-      const publicId = doc.data().filePublicId;
-      if (publicId) ids.add(publicId);
+
+  const tasksSnap = await db.collection("tasks").get();
+  for (const doc of tasksSnap.docs) {
+    const attachments = doc.data().attachments;
+    if (Array.isArray(attachments)) {
+      for (const a of attachments) if (a?.publicId) ids.add(a.publicId);
     }
   }
+
+  // Issues still use the older singular-attachment shape.
+  const issuesSnap = await db.collection("issues").get();
+  for (const doc of issuesSnap.docs) {
+    const publicId = doc.data().filePublicId;
+    if (publicId) ids.add(publicId);
+  }
+
   return ids;
 }
 

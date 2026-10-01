@@ -7,8 +7,8 @@ import {
   useUpdateTask,
   useDeleteTask,
   useDeleteTasks,
-  useRemoveTaskFile,
-  fetchTaskFileBlob,
+  useAddTaskAttachments,
+  useRemoveTaskAttachment,
 } from "../hooks/useTasks";
 import { useRequestDeletion } from "../hooks/usePendingDeletions";
 import { EmptyState } from "../components/EmptyState";
@@ -27,7 +27,7 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/D
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { FilePreviewDialog } from "../components/FilePreviewDialog";
 import { Skeleton } from "../components/Skeleton";
-import type { Task, TaskPriority } from "../lib/types";
+import type { Task, TaskAttachment, TaskPriority } from "../lib/types";
 
 const EMPTY_FORM = { title: "", description: "", dueDate: "", priority: "medium" as TaskPriority, assignedTo: "" };
 const PRIORITY_OPTIONS = [
@@ -48,17 +48,18 @@ export const TasksPage: React.FC = () => {
   const updateMutation = useUpdateTask();
   const deleteMutation = useDeleteTask();
   const bulkDeleteMutation = useDeleteTasks();
-  const removeFileMutation = useRemoveTaskFile();
+  const addAttachmentsMutation = useAddTaskAttachments();
+  const removeAttachmentMutation = useRemoveTaskAttachment();
   const requestDeletionMutation = useRequestDeletion();
   const deleteTarget = useConfirmDialog<Task>();
 
   const [statusTab, setStatusTab] = useState<"open" | "done">("open");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
-  const [previewTask, setPreviewTask] = useState<Task | null>(null);
+  const [previewFile, setPreviewFile] = useState<TaskAttachment | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
 
@@ -119,7 +120,7 @@ export const TasksPage: React.FC = () => {
 
   const resetForm = () => {
     setForm(EMPTY_FORM);
-    setFile(null);
+    setFiles([]);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -129,7 +130,7 @@ export const TasksPage: React.FC = () => {
       return;
     }
     createMutation.mutate(
-      { title: form.title, description: form.description || null, dueDate: form.dueDate || null, priority: form.priority, assignedTo: form.assignedTo || null, file },
+      { title: form.title, description: form.description || null, dueDate: form.dueDate || null, priority: form.priority, assignedTo: form.assignedTo || null, files },
       {
         onSuccess: () => {
           toast.success("Task added");
@@ -156,15 +157,32 @@ export const TasksPage: React.FC = () => {
     });
   };
 
-  const handleRemoveAttachment = () => {
+  const handleAddAttachments = (newFiles: File[]) => {
     if (!editingTask) return;
-    removeFileMutation.mutate(editingTask.id, {
-      onSuccess: () => {
-        toast.success("Attachment removed");
-        setEditingTask((prev) => (prev ? { ...prev, fileName: null, fileType: null, fileUrl: null } : prev));
-      },
-      onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to remove attachment"),
-    });
+    addAttachmentsMutation.mutate(
+      { id: editingTask.id, files: newFiles },
+      {
+        onSuccess: (uploaded) => {
+          toast.success(uploaded.length === 1 ? "Attachment added" : `${uploaded.length} attachments added`);
+          setEditingTask((prev) => (prev ? { ...prev, attachments: [...prev.attachments, ...uploaded] } : prev));
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to add attachment"),
+      }
+    );
+  };
+
+  const handleRemoveAttachment = (attachment: TaskAttachment) => {
+    if (!editingTask) return;
+    removeAttachmentMutation.mutate(
+      { id: editingTask.id, publicId: attachment.publicId },
+      {
+        onSuccess: () => {
+          toast.success("Attachment removed");
+          setEditingTask((prev) => (prev ? { ...prev, attachments: prev.attachments.filter((a) => a.publicId !== attachment.publicId) } : prev));
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to remove attachment"),
+      }
+    );
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -275,15 +293,20 @@ export const TasksPage: React.FC = () => {
           </div>
           <AutoCompleteField label="Assigned To" options={lookupsQuery.data?.taskAssignees ?? []} value={form.assignedTo} onChange={(v) => setForm((p) => ({ ...p, assignedTo: v }))} />
           <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-foreground">Attachment</label>
-            {file ? (
-              <div className="flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground">
-                <Paperclip size={14} /> <span>{file.name}</span>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setFile(null)}>Remove</Button>
+            <label className="text-[0.8125rem] font-medium text-foreground">Attachments</label>
+            {files.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {files.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground">
+                    <Paperclip size={14} className="shrink-0" /> <span className="flex-1 truncate">{f.name}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}>
+                      Remove
+                    </Button>
+                  </div>
+                ))}
               </div>
-            ) : (
-              <FileDropzone onFileSelected={setFile} />
             )}
+            <FileDropzone multiple onFilesSelected={(newFiles) => setFiles((prev) => [...prev, ...newFiles])} />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={createMutation.isPending}>
@@ -318,20 +341,32 @@ export const TasksPage: React.FC = () => {
           </div>
           <AutoCompleteField label="Assigned To" options={lookupsQuery.data?.taskAssignees ?? []} value={editForm.assignedTo} onChange={(v) => setEditForm((p) => ({ ...p, assignedTo: v }))} />
           <div className="flex flex-col gap-2">
-            <label className="text-[0.8125rem] font-medium text-foreground">Attachment</label>
-            {editingTask?.fileName ? (
-              <div className="flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground">
-                <Paperclip size={14} className="shrink-0" /> <span className="flex-1 truncate">{editingTask.fileName}</span>
-                <Button type="button" variant="ghost" size="sm" onClick={() => editingTask && setPreviewTask(editingTask)}>
-                  <Eye size={14} /> View
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={handleRemoveAttachment} disabled={removeFileMutation.isPending}>
-                  {removeFileMutation.isPending ? "Removing..." : "Remove"}
-                </Button>
+            <label className="text-[0.8125rem] font-medium text-foreground">Attachments</label>
+            {editingTask && editingTask.attachments.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                {editingTask.attachments.map((attachment) => (
+                  <div key={attachment.publicId} className="flex items-center gap-2 rounded border border-border bg-surface px-3 py-2 text-sm text-foreground">
+                    <Paperclip size={14} className="shrink-0" /> <span className="flex-1 truncate">{attachment.fileName}</span>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewFile(attachment)}>
+                      <Eye size={14} /> View
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveAttachment(attachment)}
+                      disabled={removeAttachmentMutation.isPending}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
               </div>
             ) : (
-              <p className="text-[0.8125rem] text-muted-foreground">No attachment.</p>
+              <p className="text-[0.8125rem] text-muted-foreground">No attachments.</p>
             )}
+            <FileDropzone multiple onFilesSelected={handleAddAttachments} />
+            {addAttachmentsMutation.isPending && <p className="text-xs text-muted-foreground">Uploading...</p>}
           </div>
           <DialogFooter>
             <Button type="submit" disabled={updateMutation.isPending}>
@@ -371,11 +406,17 @@ export const TasksPage: React.FC = () => {
                 {task.assignedTo && <span>Assigned to {task.assignedTo}</span>}
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
-                {task.fileName ? (
-                  <button type="button" onClick={() => setPreviewTask(task)} className="flex items-center gap-1 text-xs text-primary hover:underline">
-                    <Paperclip size={14} /> {task.fileName}
+                {task.attachments.length === 1 ? (
+                  <button type="button" onClick={() => setPreviewFile(task.attachments[0])} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    <Paperclip size={14} /> {task.attachments[0].fileName}
                   </button>
-                ) : <span />}
+                ) : task.attachments.length > 1 ? (
+                  <button type="button" onClick={() => openEdit(task)} className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    <Paperclip size={14} /> {task.attachments.length} attachments
+                  </button>
+                ) : (
+                  <span />
+                )}
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(task)} aria-label="Edit task">
                     <Pencil size={16} />
@@ -416,14 +457,13 @@ export const TasksPage: React.FC = () => {
         onConfirm={handleBulkDelete}
       />
 
-      {previewTask && (
+      {previewFile && (
         <FilePreviewDialog
-          open={previewTask !== null}
-          onOpenChange={(open) => !open && setPreviewTask(null)}
-          fileName={previewTask.fileName!}
-          fileType={previewTask.fileType}
-          fileUrl={previewTask.fileUrl}
-          loadBlob={previewTask.fileUrl ? undefined : () => fetchTaskFileBlob(previewTask.id, previewTask.fileType)}
+          open={previewFile !== null}
+          onOpenChange={(open) => !open && setPreviewFile(null)}
+          fileName={previewFile.fileName}
+          fileType={previewFile.fileType}
+          fileUrl={previewFile.fileUrl}
         />
       )}
     </div>
