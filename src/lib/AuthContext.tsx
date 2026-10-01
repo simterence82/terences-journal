@@ -13,7 +13,23 @@ type AuthState =
   | { type: "unauthenticated" };
 
 interface AuthContextType {
+  /**
+   * What the rest of the app should render. Identical to realAuthState,
+   * except while a Super Admin is previewing another user -- then this
+   * reports that user instead, so every existing role check throughout the
+   * app (isAdmin, isSuperAdmin, route guards, ...) renders exactly what
+   * that user would see. No real sign-in happens: Firestore rules still
+   * check the Super Admin's actual auth token, so this can't grant any
+   * access it doesn't already have -- it can only make their own screen
+   * show less.
+   */
   authState: AuthState;
+  /** The real signed-in account, ignoring any active preview. */
+  realAuthState: AuthState;
+  previewUser: User | null;
+  /** Only takes effect when the real signed-in account is a Super Admin. */
+  startPreview: (user: User) => void;
+  stopPreview: () => void;
   logout: () => Promise<void>;
   /** Call after writing users/{uid} yourself (bootstrap/approval) to re-check it. */
   refreshUser: () => Promise<void>;
@@ -46,30 +62,43 @@ async function resolveAuthState(firebaseUser: FirebaseUser): Promise<AuthState> 
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [authState, setAuthState] = useState<AuthState>({ type: "loading" });
+  const [realAuthState, setRealAuthState] = useState<AuthState>({ type: "loading" });
+  const [previewUser, setPreviewUser] = useState<User | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
-        setAuthState({ type: "unauthenticated" });
+        setRealAuthState({ type: "unauthenticated" });
+        setPreviewUser(null);
         return;
       }
-      setAuthState(await resolveAuthState(firebaseUser));
+      setRealAuthState(await resolveAuthState(firebaseUser));
     });
     return unsubscribe;
   }, []);
 
   const logout = useCallback(async () => {
+    setPreviewUser(null);
     await firebaseSignOut(auth);
   }, []);
 
   const refreshUser = useCallback(async () => {
     const firebaseUser = auth.currentUser;
     if (!firebaseUser) return;
-    setAuthState(await resolveAuthState(firebaseUser));
+    setRealAuthState(await resolveAuthState(firebaseUser));
   }, []);
 
-  return <AuthContext.Provider value={{ authState, logout, refreshUser }}>{children}</AuthContext.Provider>;
+  const startPreview = useCallback((user: User) => setPreviewUser(user), []);
+  const stopPreview = useCallback(() => setPreviewUser(null), []);
+
+  const isRealSuperAdmin = realAuthState.type === "authenticated" && realAuthState.user.role === "superadmin";
+  const authState: AuthState = previewUser && isRealSuperAdmin ? { type: "authenticated", user: previewUser } : realAuthState;
+
+  return (
+    <AuthContext.Provider value={{ authState, realAuthState, previewUser: isRealSuperAdmin ? previewUser : null, startPreview, stopPreview, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export function useAuth(): AuthContextType {

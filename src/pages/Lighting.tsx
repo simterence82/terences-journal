@@ -63,10 +63,13 @@ function costsToRows(costs: LightingCostItem[]): CostRow[] {
 }
 
 export const LightingPage: React.FC = () => {
-  const { authState } = useAuth();
+  const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
-  const currentUser = authState.type === "authenticated" ? authState.user : null;
+  // The real signed-in account, not the previewed one -- Firestore rules
+  // check who is REALLY making the write, so attribution fields like
+  // requestedBy must never claim to be the user being previewed.
+  const currentUser = realAuthState.type === "authenticated" ? realAuthState.user : null;
 
   // Cost/selling/profit/commission live in a separate Firestore collection
   // that only a Super Admin can read (see useLighting.ts) -- Admin's view of

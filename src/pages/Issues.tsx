@@ -30,10 +30,13 @@ const EMPTY_FORM = { title: "", description: "" };
 const ACCEPTED_TYPES = "application/pdf,image/jpeg,image/png";
 
 export const IssuesPage: React.FC = () => {
-  const { authState } = useAuth();
+  const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
-  const currentUser = authState.type === "authenticated" ? authState.user : null;
+  // The real signed-in account, not the previewed one -- Firestore rules
+  // check who is REALLY making the write, so attribution fields like
+  // requestedBy must never claim to be the user being previewed.
+  const currentUser = realAuthState.type === "authenticated" ? realAuthState.user : null;
 
   const listQuery = useIssuesList();
   const createMutation = useCreateIssue();

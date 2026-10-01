@@ -16,6 +16,7 @@ import {
   Moon,
   Menu,
   X,
+  Eye,
 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useThemeMode } from "../lib/useThemeMode";
@@ -34,7 +35,7 @@ const NAV_ITEMS = [
 ] as const;
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { authState, logout } = useAuth();
+  const { authState, previewUser, stopPreview, logout } = useAuth();
   const { mode, toggle } = useThemeMode();
   const [navOpen, setNavOpen] = useState(false);
   const user = authState.type === "authenticated" ? authState.user : null;
@@ -44,7 +45,19 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     : "";
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
+      {previewUser && (
+        <div className="flex flex-wrap items-center justify-center gap-3 border-b border-warning bg-[var(--warning-tint)] px-4 py-2 text-center text-[0.8125rem] font-medium text-foreground">
+          <span className="flex items-center gap-1.5">
+            <Eye size={15} className="text-warning" />
+            Viewing as {previewUser.displayName} ({previewUser.role}) -- this is a preview, not a real sign-in.
+          </span>
+          <button type="button" onClick={stopPreview} className="font-semibold text-primary hover:underline">
+            Exit Preview
+          </button>
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1 bg-background">
       {navOpen && (
         <div className="fixed inset-0 z-[300] bg-[rgba(0,0,0,0.5)] lg:hidden" onClick={() => setNavOpen(false)} />
       )}
@@ -138,6 +151,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
+      </div>
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, ShieldPlus, Trash2, UserCheck, Users as UsersIcon, X } from "lucide-react";
+import { Check, Eye, ShieldPlus, Trash2, UserCheck, Users as UsersIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   useApproveUser,
@@ -32,7 +32,7 @@ const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
 ];
 
 export const UsersPage: React.FC = () => {
-  const { authState } = useAuth();
+  const { authState, startPreview } = useAuth();
   const currentUserId = authState.type === "authenticated" ? authState.user.id : null;
   const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
@@ -269,11 +269,18 @@ export const UsersPage: React.FC = () => {
                       </td>
                       <td className="border-b border-border px-4 py-3 text-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</td>
                       <td className="border-b border-border px-4 py-3">
-                        {u.id !== currentUserId && (u.role !== "superadmin" || isSuperAdmin) && (
-                          <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
-                            <Trash2 size={16} />
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {isSuperAdmin && u.id !== currentUserId && (
+                            <Button variant="ghost" size="icon" onClick={() => startPreview(u)} aria-label={`View as ${u.displayName}`}>
+                              <Eye size={16} />
+                            </Button>
+                          )}
+                          {u.id !== currentUserId && (u.role !== "superadmin" || isSuperAdmin) && (
+                            <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
+                              <Trash2 size={16} />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -291,6 +298,11 @@ export const UsersPage: React.FC = () => {
                       <span className="text-xs text-muted-foreground">{u.createdAt ? new Date(u.createdAt).toLocaleDateString("en-SG") : "-"}</span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {isSuperAdmin && u.id !== currentUserId && (
+                        <Button variant="ghost" size="icon" onClick={() => startPreview(u)} aria-label={`View as ${u.displayName}`}>
+                          <Eye size={16} />
+                        </Button>
+                      )}
                       {u.id !== currentUserId && (u.role !== "superadmin" || isSuperAdmin) && (
                         <Button variant="ghost" size="icon" onClick={() => deleteTarget.open(u)} aria-label="Delete user">
                           <Trash2 size={16} />
