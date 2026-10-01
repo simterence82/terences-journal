@@ -47,6 +47,7 @@ function toLightingFinancials(id: string, data: Record<string, any>): LightingFi
     selling: data.selling ?? 0,
     commissionGiven: data.commissionGiven ?? 0,
     commissionRecipient: data.commissionRecipient ?? null,
+    commissionPaid: data.commissionPaid ?? false,
   };
 }
 
@@ -108,6 +109,7 @@ export const useCreateLighting = () =>
         selling: input.selling,
         commissionGiven: input.commissionGiven,
         commissionRecipient: input.commissionRecipient,
+        commissionPaid: false,
       });
       await batch.commit();
       const snap = await getDoc(opRef);
@@ -115,9 +117,13 @@ export const useCreateLighting = () =>
     },
   });
 
-export type LightingUpdateInput = Partial<LightingCreateInput> & { paidToSeller?: boolean; reimbursed?: boolean };
+export type LightingUpdateInput = Partial<LightingCreateInput> & {
+  paidToSeller?: boolean;
+  reimbursed?: boolean;
+  commissionPaid?: boolean;
+};
 
-const FINANCIAL_KEYS = new Set(["commissionGiven", "commissionRecipient", "costs", "selling"]);
+const FINANCIAL_KEYS = new Set(["commissionGiven", "commissionRecipient", "commissionPaid", "costs", "selling"]);
 
 // Splits the update across the two documents by field name -- a plain
 // checkbox toggle (paidToSeller/reimbursed) only ever touches

@@ -31,14 +31,21 @@ const EMPTY_FORM = {
   selling: "",
   notes: "",
 };
-const CHECKBOX_COLUMNS = ["Paid", "Claimed"];
+const CHECKBOX_COLUMNS = ["Paid", "Claimed", "Commission Paid"];
 
 interface CostRow {
   vendor: string;
   amount: string;
 }
 const EMPTY_COST_ROW: CostRow = { vendor: "", amount: "" };
-const EMPTY_FINANCIALS: Omit<LightingFinancials, "id"> = { costs: [], cost: 0, selling: 0, commissionGiven: 0, commissionRecipient: null };
+const EMPTY_FINANCIALS: Omit<LightingFinancials, "id"> = {
+  costs: [],
+  cost: 0,
+  selling: 0,
+  commissionGiven: 0,
+  commissionRecipient: null,
+  commissionPaid: false,
+};
 
 function costRowsTotal(rows: CostRow[]): number {
   return rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
@@ -145,6 +152,12 @@ export const LightingPage: React.FC = () => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
   };
 
+  // Writes to lightingFinancials, so this only ever runs for a Super Admin --
+  // the checkbox that calls it is only rendered in the superadmin branch.
+  const toggleCommissionPaid = (id: string, current: boolean) => {
+    updateMutation.mutate({ id, commissionPaid: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
+  };
+
   const openEdit = (entry: LightingPurchase) => {
     setEditingEntry(entry);
     const f = financialsById.get(entry.id) ?? EMPTY_FINANCIALS;
@@ -230,7 +243,7 @@ export const LightingPage: React.FC = () => {
   };
 
   const tableHeaders = isSuperAdmin
-    ? ["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Notes", "Paid", "Claimed", ""]
+    ? ["Date", "Brand", "Client", "Address", "Cost", "Selling", "Profit", "Commission", "Recipient", "Commission Paid", "Notes", "Paid", "Claimed", ""]
     : ["Date", "Brand", "Client", "Address", "Notes", "Paid", "Claimed", ""];
 
   return (
@@ -485,6 +498,9 @@ export const LightingPage: React.FC = () => {
                           <td className="border-b border-border px-4 py-3 font-semibold text-success">{formatSGD(profitOf(entry))}</td>
                           <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(f.commissionGiven)}</td>
                           <td className="border-b border-border px-4 py-3 text-foreground">{f.commissionRecipient || "-"}</td>
+                          <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} />
+                          </td>
                         </>
                       )}
                       <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
@@ -552,6 +568,11 @@ export const LightingPage: React.FC = () => {
                     <label className="flex items-center gap-1.5">
                       <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
                     </label>
+                    {isSuperAdmin && (
+                      <label className="flex items-center gap-1.5">
+                        <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} /> Commission Paid
+                      </label>
+                    )}
                   </div>
                   <div
                     className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2"
@@ -598,6 +619,7 @@ export const LightingPage: React.FC = () => {
             const commission = filtered.reduce((sum, e) => sum + (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionGiven, 0);
             const paid = filtered.filter((e) => e.paidToSeller).length;
             const claimed = filtered.filter((e) => e.reimbursed).length;
+            const commissionPaid = filtered.filter((e) => (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionPaid).length;
             return (
               <div className="grid grid-cols-2 gap-2">
                 <StatRow label="Total Entries" value={filtered.length} />
@@ -605,6 +627,7 @@ export const LightingPage: React.FC = () => {
                 <StatRow label="Total Cost" value={formatSGD(cost)} />
                 <StatRow label="Total Selling" value={formatSGD(selling)} />
                 <StatRow label="Total Commission" value={formatSGD(commission)} />
+                <StatRow label="Commission Paid" value={`${commissionPaid} / ${filtered.length}`} />
                 <StatRow label="Paid" value={`${paid} / ${filtered.length}`} />
                 <StatRow label="Pending Payment" value={filtered.length - paid} />
                 <StatRow label="Claimed" value={`${claimed} / ${filtered.length}`} />

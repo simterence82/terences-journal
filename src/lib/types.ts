@@ -59,6 +59,7 @@ export interface LightingFinancials {
   id: string;
   commissionGiven: number;
   commissionRecipient: string | null;
+  commissionPaid: boolean;
   costs: LightingCostItem[];
   /** Sum of costs[].amount, kept alongside the breakdown for quick profit math. */
   cost: number;
