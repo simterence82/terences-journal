@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Plus, Trash2, Pencil, CalendarClock } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
@@ -12,9 +12,25 @@ import { Textarea } from "../components/Textarea";
 import { Dialog, DialogHeader, DialogTitle, DialogFooter } from "../components/Dialog";
 import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
+import { Tabs } from "../components/Tabs";
 import type { ScheduleEvent } from "../lib/types";
 
 const EMPTY_FORM = { title: "", date: todayISODate(), startTime: "", endTime: "", location: "", notes: "" };
+
+type ScheduleTab = "today" | "upcoming" | "past";
+
+// Re-renders at local midnight so entries roll from Today into Past (and
+// Upcoming into Today) on their own, without anyone reloading the page.
+function useToday(): string {
+  const [today, setToday] = useState(todayISODate);
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+    const timer = setTimeout(() => setToday(todayISODate()), nextMidnight - now.getTime() + 1000);
+    return () => clearTimeout(timer);
+  }, [today]);
+  return today;
+}
 
 export const SchedulePage: React.FC = () => {
   const { authState, realAuthState } = useAuth();
@@ -37,8 +53,17 @@ export const SchedulePage: React.FC = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingEntry, setEditingEntry] = useState<ScheduleEvent | null>(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
+  const [tab, setTab] = useState<ScheduleTab>("today");
+  const today = useToday();
 
-  const entries = listQuery.data ?? [];
+  const allEntries = listQuery.data ?? [];
+  const todayEntries = allEntries.filter((e) => e.date.slice(0, 10) === today);
+  const upcomingEntries = allEntries.filter((e) => e.date.slice(0, 10) > today);
+  // Newest first so the most recent past entries sit at the top.
+  const pastEntries = allEntries.filter((e) => e.date.slice(0, 10) < today).reverse();
+  const entries = tab === "today" ? todayEntries : tab === "upcoming" ? upcomingEntries : pastEntries;
+  const emptyMessage =
+    tab === "today" ? "Nothing scheduled for today." : tab === "upcoming" ? "No upcoming entries." : "No past entries yet.";
   const setField = (key: keyof typeof EMPTY_FORM) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
   const resetForm = () => setForm(EMPTY_FORM);
 
@@ -146,6 +171,16 @@ export const SchedulePage: React.FC = () => {
         </Button>
       </div>
 
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as ScheduleTab)}
+        options={[
+          { value: "today", label: "Today", count: todayEntries.length },
+          { value: "upcoming", label: "Upcoming", count: upcomingEntries.length },
+          { value: "past", label: "Past", count: pastEntries.length },
+        ]}
+      />
+
       <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
         <DialogHeader>
           <DialogTitle>Add Schedule Entry</DialogTitle>
@@ -230,7 +265,7 @@ export const SchedulePage: React.FC = () => {
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-lg border border-border bg-card shadow">
-          <EmptyState icon={<CalendarClock size={28} />} message="No schedule entries yet." />
+          <EmptyState icon={<CalendarClock size={28} />} message={emptyMessage} />
         </div>
       ) : (
         <>
