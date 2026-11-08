@@ -502,7 +502,11 @@ export const LightingPage: React.FC = () => {
                           <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(f.commissionGiven)}</td>
                           <td className="border-b border-border px-4 py-3 text-foreground">{f.commissionRecipient || "-"}</td>
                           <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} />
+                            {f.commissionRecipient?.trim() ? (
+                              <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} />
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
                           </td>
                         </>
                       )}
@@ -573,7 +577,12 @@ export const LightingPage: React.FC = () => {
                     </label>
                     {isSuperAdmin && (
                       <label className="flex items-center gap-1.5">
-                        <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} /> Commission Paid
+                        {f.commissionRecipient?.trim() ? (
+                          <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} />
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}{" "}
+                        Commission Paid
                       </label>
                     )}
                   </div>
@@ -622,7 +631,9 @@ export const LightingPage: React.FC = () => {
             const commission = filtered.reduce((sum, e) => sum + (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionGiven, 0);
             const paid = filtered.filter((e) => e.paidToSeller).length;
             const claimed = filtered.filter((e) => e.reimbursed).length;
-            const commissionPaid = filtered.filter((e) => (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionPaid).length;
+            // Entries with no commission recipient have no commission to pay, so they're left out of this count.
+            const withRecipient = filtered.filter((e) => (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionRecipient?.trim());
+            const commissionPaid = withRecipient.filter((e) => (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionPaid).length;
             return (
               <div className="grid grid-cols-2 gap-2">
                 <StatRow label="Total Entries" value={filtered.length} />
@@ -630,7 +641,7 @@ export const LightingPage: React.FC = () => {
                 <StatRow label="Total Cost" value={formatSGD(cost)} />
                 <StatRow label="Total Selling" value={formatSGD(selling)} />
                 <StatRow label="Total Commission" value={formatSGD(commission)} />
-                <StatRow label="Commission Paid" value={`${commissionPaid} / ${filtered.length}`} />
+                <StatRow label="Commission Paid" value={`${commissionPaid} / ${withRecipient.length}`} />
                 <StatRow label="Paid" value={`${paid} / ${filtered.length}`} />
                 <StatRow label="Pending Payment" value={filtered.length - paid} />
                 <StatRow label="Claimed" value={`${claimed} / ${filtered.length}`} />
