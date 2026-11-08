@@ -19,6 +19,7 @@ import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 import { Tabs } from "../components/Tabs";
 import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
+import { PendingListDialog } from "../components/PendingListDialog";
 import type { LightingCostItem, LightingFinancials, LightingPurchase } from "../lib/types";
 
 const EMPTY_FORM = {
@@ -66,6 +67,7 @@ export const LightingPage: React.FC = () => {
   const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
   // The real signed-in account, not the previewed one -- Firestore rules
   // check who is REALLY making the write, so attribution fields like
   // requestedBy must never claim to be the user being previewed.
@@ -92,6 +94,7 @@ export const LightingPage: React.FC = () => {
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [editCostRows, setEditCostRows] = useState<CostRow[]>([{ ...EMPTY_COST_ROW }]);
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [pendingDialog, setPendingDialog] = useState<"payment" | "claims" | null>(null);
   const [statusTab, setStatusTab] = useState<"outstanding" | "completed">("outstanding");
 
   const entries = listQuery.data ?? [];
@@ -102,6 +105,15 @@ export const LightingPage: React.FC = () => {
   const totalProfit = entries.reduce((sum, e) => sum + profitOf(e), 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
   const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
+  // Amount is the entry's cost. Only a Super Admin has financials loaded, so
+  // for anyone else every amount is 0 and the dialog is told not to show them.
+  const toPendingRows = (list: LightingPurchase[]) =>
+    list.map((e) => ({
+      id: e.id,
+      title: `${e.brand} - ${e.clientName}`,
+      subtitle: new Date(e.date).toLocaleDateString("en-SG"),
+      amount: (financialsById.get(e.id) ?? EMPTY_FINANCIALS).cost,
+    }));
   // Paid/Claimed are operational fields -- this split works identically for
   // Admin and Super Admin, no financial data needed to know what's settled.
   const isFullyDone = (e: LightingPurchase) => e.paidToSeller && e.reimbursed;
@@ -434,8 +446,25 @@ export const LightingPage: React.FC = () => {
             <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} sublabel="View summary report" icon={<DollarSign size={18} />} />
           </button>
         )}
-        <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
-        <SummaryCard label="Pending Claims" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
+        {isSuperAdmin ? (
+          <button type="button" onClick={() => setPendingDialog("payment")} className="block w-full text-left">
+            <SummaryCard label="Pending Payment" value={pendingPayment} sublabel="View amount owed" icon={<Clock size={18} />} />
+          </button>
+        ) : (
+          <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
+        )}
+        {isAdmin ? (
+          <button type="button" onClick={() => setPendingDialog("claims")} className="block w-full text-left">
+            <SummaryCard
+              label="Pending Claims"
+              value={pendingReimbursement}
+              sublabel={isSuperAdmin ? "View amount unclaimed" : "View unclaimed entries"}
+              icon={<RotateCcw size={18} />}
+            />
+          </button>
+        ) : (
+          <SummaryCard label="Pending Claims" value={pendingReimbursement} icon={<RotateCcw size={18} />} />
+        )}
       </div>
 
       <Tabs
@@ -617,6 +646,25 @@ export const LightingPage: React.FC = () => {
         }
         onConfirm={handleDelete}
       />
+
+      {isSuperAdmin && (
+        <PendingListDialog
+          open={pendingDialog === "payment"}
+          onOpenChange={(open) => !open && setPendingDialog(null)}
+          title="Pending Payment"
+          rows={toPendingRows(entries.filter((e) => !e.paidToSeller))}
+          showAmounts
+        />
+      )}
+      {isAdmin && (
+        <PendingListDialog
+          open={pendingDialog === "claims"}
+          onOpenChange={(open) => !open && setPendingDialog(null)}
+          title="Pending Claims"
+          rows={toPendingRows(entries.filter((e) => !e.reimbursed))}
+          showAmounts={isSuperAdmin}
+        />
+      )}
 
       {isSuperAdmin && (
         <SummaryReportDialog

@@ -19,6 +19,7 @@ import { ConfirmDialog, useConfirmDialog } from "../components/ConfirmDialog";
 import { Skeleton } from "../components/Skeleton";
 import { Tabs } from "../components/Tabs";
 import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
+import { PendingListDialog } from "../components/PendingListDialog";
 import type { BlumPurchase } from "../lib/types";
 
 const EMPTY_FORM = { orderName: "", amount: "", date: todayISODate(), notes: "" };
@@ -28,6 +29,7 @@ export const BlumPage: React.FC = () => {
   const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
   // The real signed-in account, not the previewed one -- Firestore rules
   // check who is REALLY making the write, so attribution fields like
   // requestedBy must never claim to be the user being previewed.
@@ -47,11 +49,14 @@ export const BlumPage: React.FC = () => {
   const [editForm, setEditForm] = useState(EMPTY_FORM);
   const [statusTab, setStatusTab] = useState<"outstanding" | "completed">("outstanding");
   const [isSummaryOpen, setIsSummaryOpen] = useState(false);
+  const [pendingDialog, setPendingDialog] = useState<"payment" | "claims" | null>(null);
 
   const entries = listQuery.data ?? [];
   const totalAmount = entries.reduce((sum, e) => sum + e.amount, 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
   const pendingClaims = entries.filter((e) => !e.reimbursed).length;
+  const toPendingRows = (list: BlumPurchase[]) =>
+    list.map((e) => ({ id: e.id, title: e.orderName, subtitle: new Date(e.date).toLocaleDateString("en-SG"), amount: e.amount }));
   const isFullyDone = (e: BlumPurchase) => e.paidToSeller && !!e.invoiceRequested && e.reimbursed;
   const outstandingEntries = entries.filter((e) => !isFullyDone(e));
   const completedEntries = entries.filter(isFullyDone);
@@ -213,8 +218,20 @@ export const BlumPage: React.FC = () => {
         <button type="button" onClick={() => setIsSummaryOpen(true)} className="block w-full text-left">
           <SummaryCard label="Total Amount" value={formatSGD(totalAmount)} sublabel="View summary report" icon={<DollarSign size={18} />} />
         </button>
-        <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
-        <SummaryCard label="Pending Claims" value={pendingClaims} icon={<RotateCcw size={18} />} />
+        {isSuperAdmin ? (
+          <button type="button" onClick={() => setPendingDialog("payment")} className="block w-full text-left">
+            <SummaryCard label="Pending Payment" value={pendingPayment} sublabel="View amount owed" icon={<Clock size={18} />} />
+          </button>
+        ) : (
+          <SummaryCard label="Pending Payment" value={pendingPayment} icon={<Clock size={18} />} />
+        )}
+        {isAdmin ? (
+          <button type="button" onClick={() => setPendingDialog("claims")} className="block w-full text-left">
+            <SummaryCard label="Pending Claims" value={pendingClaims} sublabel="View amount unclaimed" icon={<RotateCcw size={18} />} />
+          </button>
+        ) : (
+          <SummaryCard label="Pending Claims" value={pendingClaims} icon={<RotateCcw size={18} />} />
+        )}
       </div>
 
       <Tabs
@@ -342,6 +359,25 @@ export const BlumPage: React.FC = () => {
         }
         onConfirm={handleDelete}
       />
+
+      {isSuperAdmin && (
+        <PendingListDialog
+          open={pendingDialog === "payment"}
+          onOpenChange={(open) => !open && setPendingDialog(null)}
+          title="Pending Payment"
+          rows={toPendingRows(entries.filter((e) => !e.paidToSeller))}
+          showAmounts
+        />
+      )}
+      {isAdmin && (
+        <PendingListDialog
+          open={pendingDialog === "claims"}
+          onOpenChange={(open) => !open && setPendingDialog(null)}
+          title="Pending Claims"
+          rows={toPendingRows(entries.filter((e) => !e.reimbursed))}
+          showAmounts
+        />
+      )}
 
       <SummaryReportDialog
         open={isSummaryOpen}
