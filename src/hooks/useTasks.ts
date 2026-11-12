@@ -14,6 +14,7 @@ import { auth, db } from "../lib/firebase";
 import { cloudinaryDownloadUrl, uploadToCloudinary } from "../lib/cloudinary";
 import { compareNullableAsc, toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
+import { DONE_KEYS, isBoth, readDual } from "../lib/dualConfirm";
 import type { Task, TaskAttachment, TaskPriority } from "../lib/types";
 
 const COLLECTION = "tasks";
@@ -22,13 +23,16 @@ const COLLECTION = "tasks";
 const LEGACY_FILES_COLLECTION = "taskFiles";
 
 function toTask(id: string, data: Record<string, any>): Task {
+  const dual = readDual(data, DONE_KEYS);
   return {
     id,
     title: data.title,
     description: data.description,
     dueDate: data.dueDate,
     priority: data.priority,
-    done: data.done,
+    done: isBoth(dual),
+    doneAdmin: dual.admin,
+    doneSuper: dual.superadmin,
     assignedTo: data.assignedTo,
     attachments: Array.isArray(data.attachments) ? data.attachments : [],
     createdBy: data.createdBy,
@@ -76,6 +80,8 @@ export const useCreateTask = () =>
         dueDate: input.dueDate ?? null,
         priority: input.priority,
         done: false,
+        doneAdmin: false,
+        doneSuper: false,
         assignedTo: input.assignedTo ?? null,
         attachments,
         hasFile: attachments.length > 0,
@@ -96,6 +102,8 @@ export interface TaskUpdateInput {
   priority?: TaskPriority;
   assignedTo?: string | null;
   done?: boolean;
+  doneAdmin?: boolean;
+  doneSuper?: boolean;
 }
 
 export const useUpdateTask = () =>

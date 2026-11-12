@@ -12,12 +12,14 @@ import {
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
+import { CLAIMED_KEYS, isBoth, readDual } from "../lib/dualConfirm";
 import type { LightingCostItem, LightingFinancials, LightingPurchase } from "../lib/types";
 
 const COLLECTION = "lightingPurchases";
 const FINANCIALS_COLLECTION = "lightingFinancials";
 
 function toLightingPurchase(id: string, data: Record<string, any>): LightingPurchase {
+  const claimed = readDual(data, CLAIMED_KEYS);
   return {
     id,
     brand: data.brand,
@@ -25,7 +27,9 @@ function toLightingPurchase(id: string, data: Record<string, any>): LightingPurc
     address: data.address,
     date: data.date,
     paidToSeller: data.paidToSeller,
-    reimbursed: data.reimbursed,
+    reimbursed: isBoth(claimed),
+    reimbursedAdmin: claimed.admin,
+    reimbursedSuper: claimed.superadmin,
     notes: data.notes,
     createdBy: data.createdBy,
     createdAt: toIso(data.createdAt),
@@ -99,6 +103,8 @@ export const useCreateLighting = () =>
         notes: input.notes,
         paidToSeller: false,
         reimbursed: false,
+        reimbursedAdmin: false,
+        reimbursedSuper: false,
         createdBy: auth.currentUser?.uid ?? null,
         createdAt: serverTimestamp(),
         isDeleted: false,
@@ -120,6 +126,8 @@ export const useCreateLighting = () =>
 export type LightingUpdateInput = Partial<LightingCreateInput> & {
   paidToSeller?: boolean;
   reimbursed?: boolean;
+  reimbursedAdmin?: boolean;
+  reimbursedSuper?: boolean;
   commissionPaid?: boolean;
 };
 

@@ -20,6 +20,8 @@ import { Skeleton } from "../components/Skeleton";
 import { Tabs } from "../components/Tabs";
 import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
 import { PendingListDialog } from "../components/PendingListDialog";
+import { DualConfirmCheckbox } from "../components/DualConfirmCheckbox";
+import { CLAIMED_KEYS, announceDualToggle, dualUpdate, partyFor, type Party } from "../lib/dualConfirm";
 import type { BlumPurchase } from "../lib/types";
 
 const EMPTY_FORM = { orderName: "", amount: "", date: todayISODate(), notes: "" };
@@ -29,6 +31,7 @@ export const BlumPage: React.FC = () => {
   const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const viewerParty = partyFor(authState.type === "authenticated" ? authState.user.role : undefined);
   const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
   // The real signed-in account, not the previewed one -- Firestore rules
   // check who is REALLY making the write, so attribution fields like
@@ -84,8 +87,20 @@ export const BlumPage: React.FC = () => {
     );
   };
 
-  const toggleField = (id: string, field: "paidToSeller" | "invoiceRequested" | "reimbursed", current: boolean) => {
+  const toggleField = (id: string, field: "paidToSeller" | "invoiceRequested", current: boolean) => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
+  };
+
+  // Claimed only counts once both the Admin and the Super Admin have ticked it.
+  const toggleClaimed = (entry: BlumPurchase, party: Party, checked: boolean) => {
+    const current = { admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper };
+    updateMutation.mutate(
+      { id: entry.id, ...dualUpdate(CLAIMED_KEYS, current, party, checked) },
+      {
+        onSuccess: () => announceDualToggle("Claim", party, checked, current),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update"),
+      }
+    );
   };
 
   const openEdit = (entry: BlumPurchase) => {
@@ -290,7 +305,7 @@ export const BlumPage: React.FC = () => {
                       <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} />
                     </td>
                     <td className="border-b border-border px-4 py-3 text-center">
-                      <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
+                      <DualConfirmCheckbox state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
                     </td>
                     <td className="border-b border-border px-4 py-3">
                       <div className="flex items-center gap-1">
@@ -328,9 +343,10 @@ export const BlumPage: React.FC = () => {
                   <label className="flex items-center gap-1.5">
                     <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} /> Invoice Requested
                   </label>
-                  <label className="flex items-center gap-1.5">
-                    <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
-                  </label>
+                  <div className="flex items-center gap-2">
+                    <span>Claimed</span>
+                    <DualConfirmCheckbox state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
+                  </div>
                 </div>
                 <div className="mt-3 flex items-center justify-end gap-1 border-t border-border pt-2">
                   <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit order">

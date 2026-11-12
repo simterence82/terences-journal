@@ -48,7 +48,10 @@ export interface LightingPurchase {
   address: string;
   date: string;
   paidToSeller: boolean;
+  /** Claimed -- true only once both reimbursedAdmin and reimbursedSuper are ticked. */
   reimbursed: boolean;
+  reimbursedAdmin: boolean;
+  reimbursedSuper: boolean;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -75,7 +78,10 @@ export interface BlumPurchase {
   date: string;
   paidToSeller: boolean;
   invoiceRequested: boolean;
+  /** Claimed -- true only once both reimbursedAdmin and reimbursedSuper are ticked. */
   reimbursed: boolean;
+  reimbursedAdmin: boolean;
+  reimbursedSuper: boolean;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -96,7 +102,10 @@ export interface Task {
   description: string | null;
   dueDate: string | null;
   priority: TaskPriority;
+  /** Done -- true only once both doneAdmin and doneSuper are ticked. */
   done: boolean;
+  doneAdmin: boolean;
+  doneSuper: boolean;
   assignedTo: string | null;
   attachments: TaskAttachment[];
   createdBy: string | null;

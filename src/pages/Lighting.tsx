@@ -20,6 +20,8 @@ import { Skeleton } from "../components/Skeleton";
 import { Tabs } from "../components/Tabs";
 import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
 import { PendingListDialog } from "../components/PendingListDialog";
+import { DualConfirmCheckbox } from "../components/DualConfirmCheckbox";
+import { CLAIMED_KEYS, announceDualToggle, dualUpdate, partyFor, type Party } from "../lib/dualConfirm";
 import type { LightingCostItem, LightingFinancials, LightingPurchase } from "../lib/types";
 
 const EMPTY_FORM = {
@@ -67,6 +69,7 @@ export const LightingPage: React.FC = () => {
   const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const viewerParty = partyFor(authState.type === "authenticated" ? authState.user.role : undefined);
   const isAdmin = authState.type === "authenticated" && (authState.user.role === "admin" || authState.user.role === "superadmin");
   // The real signed-in account, not the previewed one -- Firestore rules
   // check who is REALLY making the write, so attribution fields like
@@ -163,8 +166,20 @@ export const LightingPage: React.FC = () => {
     );
   };
 
-  const toggleField = (id: string, field: "paidToSeller" | "reimbursed", current: boolean) => {
+  const toggleField = (id: string, field: "paidToSeller", current: boolean) => {
     updateMutation.mutate({ id, [field]: !current }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update") });
+  };
+
+  // Claimed only counts once both the Admin and the Super Admin have ticked it.
+  const toggleClaimed = (entry: LightingPurchase, party: Party, checked: boolean) => {
+    const current = { admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper };
+    updateMutation.mutate(
+      { id: entry.id, ...dualUpdate(CLAIMED_KEYS, current, party, checked) },
+      {
+        onSuccess: () => announceDualToggle("Claim", party, checked, current),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update"),
+      }
+    );
   };
 
   // Writes to lightingFinancials, so this only ever runs for a Super Admin --
@@ -544,7 +559,7 @@ export const LightingPage: React.FC = () => {
                         <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
                       </td>
                       <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} />
+                        <DualConfirmCheckbox state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
                       </td>
                       <td className="border-b border-border px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
@@ -601,9 +616,10 @@ export const LightingPage: React.FC = () => {
                     <label className="flex items-center gap-1.5">
                       <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} /> Paid
                     </label>
-                    <label className="flex items-center gap-1.5">
-                      <Checkbox checked={entry.reimbursed} onChange={() => toggleField(entry.id, "reimbursed", entry.reimbursed)} /> Claimed
-                    </label>
+                    <div className="flex items-center gap-2">
+                      <span>Claimed</span>
+                      <DualConfirmCheckbox state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
+                    </div>
                     {isSuperAdmin && (
                       <label className="flex items-center gap-1.5">
                         {f.commissionRecipient?.trim() ? (

@@ -12,11 +12,13 @@ import {
 import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
+import { CLAIMED_KEYS, isBoth, readDual } from "../lib/dualConfirm";
 import type { BlumPurchase } from "../lib/types";
 
 const COLLECTION = "blumPurchases";
 
 function toBlumPurchase(id: string, data: Record<string, any>): BlumPurchase {
+  const claimed = readDual(data, CLAIMED_KEYS);
   return {
     id,
     orderName: data.orderName,
@@ -24,7 +26,9 @@ function toBlumPurchase(id: string, data: Record<string, any>): BlumPurchase {
     date: data.date,
     paidToSeller: data.paidToSeller,
     invoiceRequested: data.invoiceRequested,
-    reimbursed: data.reimbursed,
+    reimbursed: isBoth(claimed),
+    reimbursedAdmin: claimed.admin,
+    reimbursedSuper: claimed.superadmin,
     notes: data.notes,
     createdBy: data.createdBy,
     createdAt: toIso(data.createdAt),
@@ -53,6 +57,8 @@ export const useCreateBlum = () =>
         paidToSeller: false,
         invoiceRequested: false,
         reimbursed: false,
+        reimbursedAdmin: false,
+        reimbursedSuper: false,
         createdBy: auth.currentUser?.uid ?? null,
         createdAt: serverTimestamp(),
         isDeleted: false,
@@ -67,7 +73,7 @@ export const useUpdateBlum = () =>
     mutationFn: async ({
       id,
       ...updates
-    }: { id: string } & Partial<BlumCreateInput> & { paidToSeller?: boolean; invoiceRequested?: boolean; reimbursed?: boolean }) => {
+    }: { id: string } & Partial<BlumCreateInput> & { paidToSeller?: boolean; invoiceRequested?: boolean; reimbursed?: boolean; reimbursedAdmin?: boolean; reimbursedSuper?: boolean }) => {
       const ref = doc(db, COLLECTION, id);
       await updateDoc(ref, updates);
       const snap = await getDoc(ref);

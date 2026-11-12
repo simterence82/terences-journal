@@ -16,6 +16,9 @@ import { useLookups } from "../hooks/useLookups";
 import { useAuth } from "../lib/AuthContext";
 import { AutoCompleteField } from "../components/AutoCompleteField";
 import { PriorityBadge } from "../components/PriorityBadge";
+import { Badge } from "../components/Badge";
+import { DualConfirmCheckbox } from "../components/DualConfirmCheckbox";
+import { DONE_KEYS, PARTY_LABEL, announceDualToggle, dualUpdate, partyFor, type Party } from "../lib/dualConfirm";
 import { Button } from "../components/Button";
 import { Input } from "../components/Input";
 import { Textarea } from "../components/Textarea";
@@ -40,6 +43,7 @@ export const TasksPage: React.FC = () => {
   const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
+  const viewerParty = partyFor(authState.type === "authenticated" ? authState.user.role : undefined);
   // The real signed-in account, not the previewed one -- Firestore rules
   // check who is REALLY making the write, so attribution fields like
   // requestedBy must never claim to be the user being previewed.
@@ -145,8 +149,16 @@ export const TasksPage: React.FC = () => {
     );
   };
 
-  const toggleDone = (id: string, done: boolean) => {
-    updateMutation.mutate({ id, done: !done }, { onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update task") });
+  // A task only counts as done once both the Admin and the Super Admin have ticked it.
+  const toggleDone = (task: Task, party: Party, checked: boolean) => {
+    const current = { admin: task.doneAdmin, superadmin: task.doneSuper };
+    updateMutation.mutate(
+      { id: task.id, ...dualUpdate(DONE_KEYS, current, party, checked) },
+      {
+        onSuccess: () => announceDualToggle("Task", party, checked, current),
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update task"),
+      }
+    );
   };
 
   const openEdit = (task: Task) => {
@@ -396,10 +408,6 @@ export const TasksPage: React.FC = () => {
                     Select
                   </label>
                 )}
-                <label className="flex items-center gap-1 text-[0.6875rem] font-medium text-muted-foreground">
-                  <Checkbox checked={task.done} onChange={() => toggleDone(task.id, task.done)} aria-label="Mark done" />
-                  Done
-                </label>
                 <span className={`flex-1 text-[0.9375rem] font-semibold text-foreground ${task.done ? "line-through" : ""}`}>{task.title}</span>
                 <PriorityBadge priority={task.priority} />
               </div>
@@ -407,6 +415,17 @@ export const TasksPage: React.FC = () => {
               <div className="flex flex-col gap-1 text-xs text-muted-foreground">
                 {task.dueDate && <span>Due {new Date(task.dueDate).toLocaleDateString("en-SG", { day: "numeric", month: "short", year: "numeric" })}</span>}
                 {task.assignedTo && <span>Assigned to {task.assignedTo}</span>}
+              </div>
+              <div className="flex flex-col gap-2 rounded-md bg-surface px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">Done (both must tick)</span>
+                  <DualConfirmCheckbox state={{ admin: task.doneAdmin, superadmin: task.doneSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleDone(task, party, checked)} />
+                </div>
+                {task.doneAdmin !== task.doneSuper && (
+                  <Badge variant="warning" className="w-fit normal-case">
+                    Waiting for the {PARTY_LABEL[task.doneAdmin ? "superadmin" : "admin"]} to tick Done
+                  </Badge>
+                )}
               </div>
               <div className="flex items-center justify-between border-t border-border pt-2">
                 {task.attachments.length === 1 ? (
