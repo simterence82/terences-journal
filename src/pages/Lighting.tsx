@@ -108,14 +108,16 @@ export const LightingPage: React.FC = () => {
   const totalProfit = entries.reduce((sum, e) => sum + profitOf(e), 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
   const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
-  // Amount is the entry's cost. Only a Super Admin has financials loaded, so
-  // for anyone else every amount is 0 and the dialog is told not to show them.
-  const toPendingRows = (list: LightingPurchase[]) =>
+  // Pending Payment adds up what is still owed to sellers (cost); Pending Claims
+  // adds up what is still to be claimed (selling price). Only a Super Admin has
+  // financials loaded, so for anyone else every amount is 0 and the dialog is
+  // told not to show them.
+  const toPendingRows = (list: LightingPurchase[], amountField: "cost" | "selling") =>
     list.map((e) => ({
       id: e.id,
       title: `${e.brand} - ${e.clientName}`,
       subtitle: new Date(e.date).toLocaleDateString("en-SG"),
-      amount: (financialsById.get(e.id) ?? EMPTY_FINANCIALS).cost,
+      amount: (financialsById.get(e.id) ?? EMPTY_FINANCIALS)[amountField],
     }));
   // Paid/Claimed are operational fields -- this split works identically for
   // Admin and Super Admin, no financial data needed to know what's settled.
@@ -668,7 +670,7 @@ export const LightingPage: React.FC = () => {
           open={pendingDialog === "payment"}
           onOpenChange={(open) => !open && setPendingDialog(null)}
           title="Pending Payment"
-          rows={toPendingRows(entries.filter((e) => !e.paidToSeller))}
+          rows={toPendingRows(entries.filter((e) => !e.paidToSeller), "cost")}
           showAmounts
           onSelect={(id) => {
             const entry = entries.find((e) => e.id === id);
@@ -683,7 +685,7 @@ export const LightingPage: React.FC = () => {
           open={pendingDialog === "claims"}
           onOpenChange={(open) => !open && setPendingDialog(null)}
           title="Pending Claims"
-          rows={toPendingRows(entries.filter((e) => !e.reimbursed))}
+          rows={toPendingRows(entries.filter((e) => !e.reimbursed), "selling")}
           showAmounts={isSuperAdmin}
           onSelect={(id) => {
             const entry = entries.find((e) => e.id === id);
