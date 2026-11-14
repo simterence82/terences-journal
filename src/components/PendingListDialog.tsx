@@ -17,9 +17,11 @@ interface PendingListDialogProps {
   rows: PendingRow[];
   /** When false only the entries and their count are shown, never any dollar figure. */
   showAmounts: boolean;
+  /** Called with the row id when a row is clicked, so the caller can open that entry's details. */
+  onSelect?: (id: string) => void;
 }
 
-export const PendingListDialog: React.FC<PendingListDialogProps> = ({ open, onOpenChange, title, rows, showAmounts }) => {
+export const PendingListDialog: React.FC<PendingListDialogProps> = ({ open, onOpenChange, title, rows, showAmounts, onSelect }) => {
   const total = rows.reduce((sum, r) => sum + r.amount, 0);
 
   return (
@@ -39,14 +41,20 @@ export const PendingListDialog: React.FC<PendingListDialogProps> = ({ open, onOp
       {rows.length === 0 ? (
         <p className="py-6 text-center text-sm text-muted-foreground">Nothing outstanding.</p>
       ) : (
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border">
           {rows.map((r) => (
-            <li key={r.id} className="flex items-center justify-between gap-3 px-4 py-3">
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-medium text-foreground">{r.title}</span>
-                <span className="truncate text-xs text-muted-foreground">{r.subtitle}</span>
-              </div>
-              {showAmounts && <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{formatSGD(r.amount)}</span>}
+            <li key={r.id}>
+              <button
+                type="button"
+                onClick={() => onSelect?.(r.id)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface"
+              >
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-medium text-foreground">{r.title}</span>
+                  <span className="truncate text-xs text-muted-foreground">{r.subtitle}</span>
+                </div>
+                {showAmounts && <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{formatSGD(r.amount)}</span>}
+              </button>
             </li>
           ))}
         </ul>

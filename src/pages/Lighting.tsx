@@ -670,6 +670,12 @@ export const LightingPage: React.FC = () => {
           title="Pending Payment"
           rows={toPendingRows(entries.filter((e) => !e.paidToSeller))}
           showAmounts
+          onSelect={(id) => {
+            const entry = entries.find((e) => e.id === id);
+            if (!entry) return;
+            setPendingDialog(null);
+            openEdit(entry);
+          }}
         />
       )}
       {isAdmin && (
@@ -679,6 +685,12 @@ export const LightingPage: React.FC = () => {
           title="Pending Claims"
           rows={toPendingRows(entries.filter((e) => !e.reimbursed))}
           showAmounts={isSuperAdmin}
+          onSelect={(id) => {
+            const entry = entries.find((e) => e.id === id);
+            if (!entry) return;
+            setPendingDialog(null);
+            openEdit(entry);
+          }}
         />
       )}
 
