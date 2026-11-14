@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarDays,
@@ -22,7 +22,8 @@ import { useScheduleList } from "../hooks/useSchedule";
 import { usePendingDeletionsList, useApproveDeletion, useRejectDeletion } from "../hooks/usePendingDeletions";
 import { useAuth } from "../lib/AuthContext";
 import { toast } from "sonner";
-import { ShieldAlert, Check, X as XIcon } from "lucide-react";
+import { ShieldAlert, Check, Eye, X as XIcon } from "lucide-react";
+import { DeletionRequestDialog } from "../components/DeletionRequestDialog";
 import { Button } from "../components/Button";
 import { getChineseLunarDateLabel } from "../lib/lunarCalendar";
 import { todayISODate } from "../lib/date";
@@ -56,6 +57,7 @@ export const DashboardPage: React.FC = () => {
   const rejectDeletionMutation = useRejectDeletion();
 
   const pendingDeletions = pendingDeletionsQuery.data ?? [];
+  const [detailRequest, setDetailRequest] = useState<(typeof pendingDeletions)[number] | null>(null);
 
   const handleApproveDeletion = (request: (typeof pendingDeletions)[number]) => {
     approveDeletionMutation.mutate(request, {
@@ -120,14 +122,17 @@ export const DashboardPage: React.FC = () => {
           <ul className="flex flex-col gap-2">
             {pendingDeletions.map((request) => (
               <li key={request.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-border bg-card p-3">
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-medium text-foreground">{request.title}</span>
+                <button type="button" onClick={() => setDetailRequest(request)} className="flex min-w-0 flex-col text-left" aria-label={`View details of ${request.title}`}>
+                  <span className="truncate text-sm font-medium text-foreground hover:text-primary hover:underline">{request.title}</span>
                   <span className="text-xs text-muted-foreground">
                     {request.subtitle} &middot; {request.action === "permanent" ? "Permanent delete" : "Move to Trash Bin"}
                     {request.requestedByName && ` · requested by ${request.requestedByName}`}
                   </span>
-                </div>
+                </button>
                 <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setDetailRequest(request)}>
+                    <Eye size={14} /> View details
+                  </Button>
                   <Button size="sm" variant="destructive" onClick={() => handleApproveDeletion(request)}>
                     <Check size={14} /> Approve
                   </Button>
@@ -139,6 +144,15 @@ export const DashboardPage: React.FC = () => {
             ))}
           </ul>
         </section>
+      )}
+
+      {isSuperAdmin && (
+        <DeletionRequestDialog
+          request={detailRequest}
+          onClose={() => setDetailRequest(null)}
+          onApprove={handleApproveDeletion}
+          onReject={handleRejectDeletion}
+        />
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
