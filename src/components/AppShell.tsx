@@ -59,11 +59,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       )}
       <div className="flex min-h-0 flex-1 bg-background">
       {navOpen && (
-        <div className="fixed inset-0 z-[300] bg-[rgba(0,0,0,0.5)] lg:hidden" onClick={() => setNavOpen(false)} />
+        <div className="fixed inset-0 z-[300] bg-[rgba(0,0,0,0.5)] xl:hidden" onClick={() => setNavOpen(false)} />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-[310] flex w-60 shrink-0 flex-col border-r border-border bg-sidebar px-4 py-6 transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-[310] flex w-60 shrink-0 flex-col border-r border-border bg-sidebar px-4 py-6 transition-transform duration-200 xl:static xl:z-auto xl:translate-x-0 ${
           navOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -77,7 +77,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <button
             type="button"
             onClick={() => setNavOpen(false)}
-            className="text-muted-foreground hover:text-foreground lg:hidden"
+            className="text-muted-foreground hover:text-foreground xl:hidden"
             aria-label="Close menu"
           >
             <X size={20} />
@@ -106,12 +106,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </nav>
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-3 sm:px-6 lg:justify-end lg:px-8 lg:py-4">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-between gap-4 border-b border-border bg-surface px-4 py-3 sm:px-6 lg:px-8 lg:py-4 xl:justify-end">
           <button
             type="button"
             onClick={() => setNavOpen(true)}
-            className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted lg:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:bg-muted xl:hidden"
             aria-label="Open menu"
           >
             <Menu size={20} />
@@ -150,7 +150,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
       </div>
     </div>

@@ -276,13 +276,13 @@ export const BlumPage: React.FC = () => {
       ) : (
         <>
           <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
-            <table className="w-full whitespace-nowrap text-[0.8125rem]">
+            <table className="w-full text-[0.8125rem]">
               <thead className="bg-surface">
                 <tr>
                   {["Date", "Order Name", "Amount", "Notes", "Paid", "Invoice Requested", "Claimed", ""].map((h) => (
                     <th
                       key={h}
-                      className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
+                      className={`border-b border-border px-3 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
                         CHECKBOX_COLUMNS.includes(h) ? "text-center" : "text-left"
                       }`}
                     >
@@ -294,20 +294,20 @@ export const BlumPage: React.FC = () => {
               <tbody>
                 {visibleEntries.map((entry) => (
                   <tr key={entry.id} className="cursor-pointer hover:bg-surface" onClick={() => openEdit(entry)}>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{entry.orderName}</td>
-                    <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(entry.amount)}</td>
-                    <td className="max-w-[16rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                    <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
+                    <td className="border-b border-border px-3 py-3 text-foreground">{entry.orderName}</td>
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-foreground">{formatSGD(entry.amount)}</td>
+                    <td className="max-w-[12rem] break-words border-b border-border px-3 py-3 text-foreground">{entry.notes || "-"}</td>
+                    <td className="border-b border-border px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
                     </td>
-                    <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                    <td className="border-b border-border px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                       <Checkbox checked={!!entry.invoiceRequested} onChange={() => toggleField(entry.id, "invoiceRequested", !!entry.invoiceRequested)} />
                     </td>
-                    <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      <DualConfirmCheckbox state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
+                    <td className="border-b border-border px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <DualConfirmCheckbox stacked state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
                     </td>
-                    <td className="border-b border-border px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="border-b border-border px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit order">
                           <Pencil size={16} />

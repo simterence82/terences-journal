@@ -52,6 +52,12 @@ export interface LightingPurchase {
   reimbursed: boolean;
   reimbursedAdmin: boolean;
   reimbursedSuper: boolean;
+  /**
+   * Selling price only -- a copy of lightingFinancials.selling, kept here so the
+   * Pending Claims total can be shown to Admin too. Cost, profit and commission
+   * stay Super Admin only.
+   */
+  selling: number;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;

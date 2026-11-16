@@ -108,16 +108,16 @@ export const LightingPage: React.FC = () => {
   const totalProfit = entries.reduce((sum, e) => sum + profitOf(e), 0);
   const pendingPayment = entries.filter((e) => !e.paidToSeller).length;
   const pendingReimbursement = entries.filter((e) => !e.reimbursed).length;
-  // Pending Payment adds up what is still owed to sellers (cost); Pending Claims
-  // adds up what is still to be claimed (selling price). Only a Super Admin has
-  // financials loaded, so for anyone else every amount is 0 and the dialog is
-  // told not to show them.
+  // Pending Payment adds up what is still owed to sellers (cost, Super Admin only);
+  // Pending Claims adds up what is still to be claimed (selling price), which
+  // Admin sees too -- it comes from the entry itself, not the Super Admin-only
+  // financials.
   const toPendingRows = (list: LightingPurchase[], amountField: "cost" | "selling") =>
     list.map((e) => ({
       id: e.id,
       title: `${e.brand} - ${e.clientName}`,
       subtitle: new Date(e.date).toLocaleDateString("en-SG"),
-      amount: (financialsById.get(e.id) ?? EMPTY_FINANCIALS)[amountField],
+      amount: amountField === "selling" ? e.selling : (financialsById.get(e.id) ?? EMPTY_FINANCIALS).cost,
     }));
   // Paid/Claimed are operational fields -- this split works identically for
   // Admin and Super Admin, no financial data needed to know what's settled.
@@ -475,7 +475,7 @@ export const LightingPage: React.FC = () => {
             <SummaryCard
               label="Pending Claims"
               value={pendingReimbursement}
-              sublabel={isSuperAdmin ? "View amount unclaimed" : "View unclaimed entries"}
+              sublabel="View amount unclaimed"
               icon={<RotateCcw size={18} />}
             />
           </button>
@@ -510,14 +510,14 @@ export const LightingPage: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-lg border border-border bg-card shadow md:block">
-            <table className="w-full whitespace-nowrap text-[0.8125rem]">
+          <div className={`overflow-x-auto rounded-lg border border-border bg-card shadow ${isSuperAdmin ? "hidden 2xl:block" : "hidden md:block"}`}>
+            <table className="w-full text-[0.8125rem]">
               <thead className="bg-surface">
                 <tr>
                   {tableHeaders.map((h) => (
                     <th
                       key={h}
-                      className={`border-b border-border px-4 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
+                      className={`border-b border-border px-3 py-3 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground ${
                         CHECKBOX_COLUMNS.includes(h) ? "text-center" : "text-left"
                       }`}
                     >
@@ -531,23 +531,23 @@ export const LightingPage: React.FC = () => {
                   const f = financialsById.get(entry.id) ?? EMPTY_FINANCIALS;
                   return (
                     <tr key={entry.id} className="cursor-pointer hover:bg-surface" onClick={() => openEdit(entry)}>
-                      <td className="border-b border-border px-4 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
-                      <td className="border-b border-border px-4 py-3 text-foreground">{entry.brand}</td>
-                      <td className="border-b border-border px-4 py-3 text-foreground">{entry.clientName}</td>
-                      <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.address}</td>
+                      <td className="whitespace-nowrap border-b border-border px-3 py-3 text-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</td>
+                      <td className="border-b border-border px-3 py-3 text-foreground">{entry.brand}</td>
+                      <td className="border-b border-border px-3 py-3 text-foreground">{entry.clientName}</td>
+                      <td className="max-w-[12rem] break-words border-b border-border px-3 py-3 text-foreground">{entry.address}</td>
                       {isSuperAdmin && (
                         <>
                           <td
-                            className="border-b border-border px-4 py-3 text-foreground"
+                            className="border-b border-border px-3 py-3 text-foreground"
                             title={f.costs.map((c) => `${c.vendor ?? "Vendor"}: ${formatSGD(c.amount)}`).join(", ")}
                           >
                             {formatSGD(f.cost)}
                           </td>
-                          <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(f.selling)}</td>
-                          <td className="border-b border-border px-4 py-3 font-semibold text-success">{formatSGD(profitOf(entry))}</td>
-                          <td className="border-b border-border px-4 py-3 text-foreground">{formatSGD(f.commissionGiven)}</td>
-                          <td className="border-b border-border px-4 py-3 text-foreground">{f.commissionRecipient || "-"}</td>
-                          <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <td className="whitespace-nowrap border-b border-border px-3 py-3 text-foreground">{formatSGD(f.selling)}</td>
+                          <td className="whitespace-nowrap border-b border-border px-3 py-3 font-semibold text-success">{formatSGD(profitOf(entry))}</td>
+                          <td className="whitespace-nowrap border-b border-border px-3 py-3 text-foreground">{formatSGD(f.commissionGiven)}</td>
+                          <td className="border-b border-border px-3 py-3 text-foreground">{f.commissionRecipient || "-"}</td>
+                          <td className="border-b border-border px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                             {f.commissionRecipient?.trim() ? (
                               <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} />
                             ) : (
@@ -556,14 +556,14 @@ export const LightingPage: React.FC = () => {
                           </td>
                         </>
                       )}
-                      <td className="max-w-[12rem] truncate border-b border-border px-4 py-3 text-foreground">{entry.notes || "-"}</td>
-                      <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="max-w-[12rem] break-words border-b border-border px-3 py-3 text-foreground">{entry.notes || "-"}</td>
+                      <td className="border-b border-border px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <Checkbox checked={entry.paidToSeller} onChange={() => toggleField(entry.id, "paidToSeller", entry.paidToSeller)} />
                       </td>
-                      <td className="border-b border-border px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                        <DualConfirmCheckbox state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
+                      <td className="border-b border-border px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <DualConfirmCheckbox stacked state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
                       </td>
-                      <td className="border-b border-border px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                      <td className="border-b border-border px-3 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1">
                           <Button variant="ghost" size="icon" onClick={() => openEdit(entry)} aria-label="Edit entry">
                             <Pencil size={16} />
@@ -582,7 +582,7 @@ export const LightingPage: React.FC = () => {
             </table>
           </div>
 
-          <div className="flex flex-col gap-3 md:hidden">
+          <div className={isSuperAdmin ? "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:hidden" : "flex flex-col gap-3 md:hidden"}>
             {visibleEntries.map((entry) => {
               const f = financialsById.get(entry.id) ?? EMPTY_FINANCIALS;
               return (
@@ -686,7 +686,7 @@ export const LightingPage: React.FC = () => {
           onOpenChange={(open) => !open && setPendingDialog(null)}
           title="Pending Claims"
           rows={toPendingRows(entries.filter((e) => !e.reimbursed), "selling")}
-          showAmounts={isSuperAdmin}
+          showAmounts
           onSelect={(id) => {
             const entry = entries.find((e) => e.id === id);
             if (!entry) return;

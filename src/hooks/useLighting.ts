@@ -30,6 +30,7 @@ function toLightingPurchase(id: string, data: Record<string, any>): LightingPurc
     reimbursed: isBoth(claimed),
     reimbursedAdmin: claimed.admin,
     reimbursedSuper: claimed.superadmin,
+    selling: data.selling ?? 0,
     notes: data.notes,
     createdBy: data.createdBy,
     createdAt: toIso(data.createdAt),
@@ -101,6 +102,7 @@ export const useCreateLighting = () =>
         address: input.address,
         date: input.date,
         notes: input.notes,
+        selling: input.selling,
         paidToSeller: false,
         reimbursed: false,
         reimbursedAdmin: false,
@@ -149,6 +151,8 @@ export const useUpdateLighting = () =>
         if (FINANCIAL_KEYS.has(key)) financial[key] = value;
         else operational[key] = value;
       }
+      // Keep the readable copy of the selling price in step with the Super Admin one.
+      if (typeof financial.selling === "number") operational.selling = financial.selling;
       if (Array.isArray(financial.costs)) {
         financial.cost = (financial.costs as LightingCostItem[]).reduce((sum, c) => sum + c.amount, 0);
       }
