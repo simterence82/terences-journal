@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Lightbulb,
   Package,
+  Receipt,
   Cloud,
   Newspaper,
   CloudRain,
@@ -50,6 +51,7 @@ export const DashboardPage: React.FC = () => {
   const tasksQuery = useTasksList();
   const issuesQuery = useIssuesList();
   const lightingQuery = useLightingList();
+  const miscQuery = useLightingList("misc");
   const blumQuery = useBlumList();
   const scheduleQuery = useScheduleList();
   const pendingDeletionsQuery = usePendingDeletionsList();
@@ -90,6 +92,7 @@ export const DashboardPage: React.FC = () => {
   const openTasks = (tasksQuery.data ?? []).filter((t) => !t.done);
   const unresolvedIssues = (issuesQuery.data ?? []).filter((i) => !i.resolved);
   const outstandingLightingOrders = (lightingQuery.data ?? []).filter((e) => !e.reimbursed);
+  const outstandingMiscClaims = (miscQuery.data ?? []).filter((e) => !e.reimbursed);
   const outstandingBlumClaims = (blumQuery.data ?? []).filter((e) => !e.reimbursed);
   const todaysSchedule = (scheduleQuery.data ?? []).filter((s) => s.date === today);
 
@@ -206,7 +209,7 @@ export const DashboardPage: React.FC = () => {
         )}
       </section>
 
-      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+      <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3`}>
         <Link to="/tasks" className="block">
           <SummaryCard
             label="Open Tasks"
@@ -245,6 +248,17 @@ export const DashboardPage: React.FC = () => {
             tone="secondary"
           />
         </Link>
+        {isAdmin && (
+          <Link to="/misc-claims" className="block">
+            <SummaryCard
+              label="Miscellaneous Outstanding Claims"
+              value={miscQuery.isLoading ? <Skeleton style={{ width: 40, height: 32 }} /> : outstandingMiscClaims.length}
+              sublabel={`${(miscQuery.data ?? []).length} total`}
+              icon={<Receipt size={18} />}
+              tone="warning"
+            />
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.3fr_1fr]">
