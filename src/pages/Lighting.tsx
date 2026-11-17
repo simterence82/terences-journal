@@ -51,6 +51,11 @@ const EMPTY_FINANCIALS: Omit<LightingFinancials, "id"> = {
   commissionPaid: false,
 };
 
+// A commission only exists once a recipient or an amount has been filled in --
+// with neither, there is nothing to pay out, so no Commission Paid box.
+const hasCommission = (f: Pick<LightingFinancials, "commissionGiven" | "commissionRecipient">) =>
+  f.commissionGiven > 0 || !!f.commissionRecipient?.trim();
+
 function costRowsTotal(rows: CostRow[]): number {
   return rows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 }
@@ -551,7 +556,7 @@ export const LightingPage: React.FC<{ scope?: LightingScope }> = ({ scope = "lig
                           <td className="whitespace-nowrap border-b border-border px-3 py-3 text-foreground">{formatSGD(f.commissionGiven)}</td>
                           <td className="border-b border-border px-3 py-3 text-foreground">{f.commissionRecipient || "-"}</td>
                           <td className="border-b border-border px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                            {f.commissionRecipient?.trim() ? (
+                            {hasCommission(f) ? (
                               <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} />
                             ) : (
                               <span className="text-muted-foreground">-</span>
@@ -596,7 +601,12 @@ export const LightingPage: React.FC<{ scope?: LightingScope }> = ({ scope = "lig
                       <span className="truncate text-xs text-muted-foreground">{entry.address}</span>
                       <span className="text-xs text-muted-foreground">{new Date(entry.date).toLocaleDateString("en-SG")}</span>
                     </div>
-                    {isSuperAdmin && <span className="shrink-0 font-semibold text-success">{formatSGD(profitOf(entry))}</span>}
+                    {isSuperAdmin && (
+                      <span className="shrink-0 text-right font-semibold text-success">
+                        <span className="mr-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">Profit</span>
+                        {formatSGD(profitOf(entry))}
+                      </span>
+                    )}
                   </div>
                   {isSuperAdmin && (
                     <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -625,14 +635,9 @@ export const LightingPage: React.FC<{ scope?: LightingScope }> = ({ scope = "lig
                       <span>Claimed</span>
                       <DualConfirmCheckbox state={{ admin: entry.reimbursedAdmin, superadmin: entry.reimbursedSuper }} viewerParty={viewerParty} onToggle={(party, checked) => toggleClaimed(entry, party, checked)} />
                     </div>
-                    {isSuperAdmin && (
+                    {isSuperAdmin && hasCommission(f) && (
                       <label className="flex items-center gap-1.5">
-                        {f.commissionRecipient?.trim() ? (
-                          <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} />
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}{" "}
-                        Commission Paid
+                        <Checkbox checked={f.commissionPaid} onChange={() => toggleCommissionPaid(entry.id, f.commissionPaid)} /> Commission Paid
                       </label>
                     )}
                   </div>
@@ -712,8 +717,8 @@ export const LightingPage: React.FC<{ scope?: LightingScope }> = ({ scope = "lig
             const commission = filtered.reduce((sum, e) => sum + (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionGiven, 0);
             const paid = filtered.filter((e) => e.paidToSeller).length;
             const claimed = filtered.filter((e) => e.reimbursed).length;
-            // Entries with no commission recipient have no commission to pay, so they're left out of this count.
-            const withRecipient = filtered.filter((e) => (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionRecipient?.trim());
+            // Entries with no commission (no recipient and no amount) have nothing to pay, so they're left out of this count.
+            const withRecipient = filtered.filter((e) => hasCommission(financialsById.get(e.id) ?? EMPTY_FINANCIALS));
             const commissionPaid = withRecipient.filter((e) => (financialsById.get(e.id) ?? EMPTY_FINANCIALS).commissionPaid).length;
             return (
               <div className="grid grid-cols-2 gap-2">
