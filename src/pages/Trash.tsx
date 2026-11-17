@@ -19,6 +19,7 @@ const itemKey = (item: Pick<TrashItem, "kind" | "id">) => `${item.kind}-${item.i
 
 const KIND_LABEL: Record<TrashItem["kind"], string> = {
   lighting: "Lighting",
+  misc: "Misc Claims",
   blum: "Blum",
   tasks: "Task",
   issues: "Issue",

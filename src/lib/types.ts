@@ -15,7 +15,7 @@ export interface PendingUser {
   requestedAt: string;
 }
 
-export type PendingDeletionEntityKind = "lighting" | "blum" | "tasks" | "issues" | "schedule";
+export type PendingDeletionEntityKind = "lighting" | "misc" | "blum" | "tasks" | "issues" | "schedule";
 export type PendingDeletionAction = "soft" | "permanent";
 
 export interface PendingDeletion {
@@ -143,7 +143,7 @@ export interface ScheduleEvent {
   createdAt: string;
 }
 
-export type TrashKind = "lighting" | "blum" | "tasks" | "issues" | "schedule";
+export type TrashKind = "lighting" | "misc" | "blum" | "tasks" | "issues" | "schedule";
 
 export interface TrashItem {
   kind: TrashKind;

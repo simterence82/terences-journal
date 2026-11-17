@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, X, Trash2, Pencil, Lightbulb, DollarSign, Clock, RotateCcw } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Lightbulb, Receipt, DollarSign, Clock, RotateCcw } from "lucide-react";
 import { EmptyState } from "../components/EmptyState";
 import { toast } from "sonner";
 import { useLightingList, useLightingFinancialsList, useCreateLighting, useUpdateLighting, useDeleteLighting } from "../hooks/useLighting";
@@ -21,6 +21,7 @@ import { Tabs } from "../components/Tabs";
 import { SummaryReportDialog, StatRow } from "../components/SummaryReportDialog";
 import { PendingListDialog } from "../components/PendingListDialog";
 import { DualConfirmCheckbox } from "../components/DualConfirmCheckbox";
+import { LIGHTING_SCOPES, type LightingScope } from "../lib/lightingScope";
 import { CLAIMED_KEYS, announceDualToggle, dualUpdate, partyFor, type Party } from "../lib/dualConfirm";
 import type { LightingCostItem, LightingFinancials, LightingPurchase } from "../lib/types";
 
@@ -65,7 +66,9 @@ function costsToRows(costs: LightingCostItem[]): CostRow[] {
   return costs.length > 0 ? costs.map((c) => ({ vendor: c.vendor ?? "", amount: c.amount.toFixed(2) })) : [{ ...EMPTY_COST_ROW }];
 }
 
-export const LightingPage: React.FC = () => {
+export const LightingPage: React.FC<{ scope?: LightingScope }> = ({ scope = "lighting" }) => {
+  const cfg = LIGHTING_SCOPES[scope];
+  const EntryIcon = scope === "misc" ? Receipt : Lightbulb;
   const { authState, realAuthState } = useAuth();
   const canDelete = authState.type === "authenticated";
   const isSuperAdmin = authState.type === "authenticated" && authState.user.role === "superadmin";
@@ -79,14 +82,14 @@ export const LightingPage: React.FC = () => {
   // Cost/selling/profit/commission live in a separate Firestore collection
   // that only a Super Admin can read (see useLighting.ts) -- Admin's view of
   // this page never fetches, computes, or renders any of it.
-  const listQuery = useLightingList();
-  const financialsQuery = useLightingFinancialsList(isSuperAdmin);
+  const listQuery = useLightingList(scope);
+  const financialsQuery = useLightingFinancialsList(isSuperAdmin, scope);
   const financialsById = new Map((financialsQuery.data ?? []).map((f) => [f.id, f]));
 
-  const lookupsQuery = useLookups();
-  const createMutation = useCreateLighting();
-  const updateMutation = useUpdateLighting();
-  const deleteMutation = useDeleteLighting();
+  const lookupsQuery = useLookups(scope);
+  const createMutation = useCreateLighting(scope);
+  const updateMutation = useUpdateLighting(scope);
+  const deleteMutation = useDeleteLighting(scope);
   const requestDeletionMutation = useRequestDeletion();
   const deleteTarget = useConfirmDialog<LightingPurchase>();
 
@@ -159,7 +162,7 @@ export const LightingPage: React.FC = () => {
       },
       {
         onSuccess: () => {
-          toast.success("Lighting purchase added");
+          toast.success(`${cfg.entryNoun[0].toUpperCase()}${cfg.entryNoun.slice(1)} added`);
           resetForm();
           setIsOpen(false);
         },
@@ -239,7 +242,7 @@ export const LightingPage: React.FC = () => {
           },
       {
         onSuccess: () => {
-          toast.success("Lighting purchase updated");
+          toast.success(`${cfg.entryNoun[0].toUpperCase()}${cfg.entryNoun.slice(1)} updated`);
           setEditingEntry(null);
         },
         onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to update entry"),
@@ -258,11 +261,11 @@ export const LightingPage: React.FC = () => {
     } else {
       await requestDeletionMutation.mutateAsync(
         {
-          kind: "lighting",
+          kind: cfg.kind,
           entityId: entry.id,
           action: "soft",
           title: `${entry.brand} - ${entry.clientName}`,
-          subtitle: "Smart Lighting Purchase",
+          subtitle: cfg.recordLabel,
           requestedBy: currentUser?.id ?? null,
           requestedByName: currentUser?.displayName ?? null,
         },
@@ -282,8 +285,8 @@ export const LightingPage: React.FC = () => {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-foreground">Smart Lighting Purchases</h1>
-          <p className="mt-1 text-[0.9375rem] text-muted-foreground">Track lighting jobs, commissions, and claims</p>
+          <h1 className="font-display text-3xl font-semibold text-foreground">{cfg.pageTitle}</h1>
+          <p className="mt-1 text-[0.9375rem] text-muted-foreground">{cfg.pageSubtitle}</p>
         </div>
         {isSuperAdmin && (
           <Button onClick={() => setIsOpen(true)}>
@@ -295,7 +298,7 @@ export const LightingPage: React.FC = () => {
       {isSuperAdmin && (
         <Dialog open={isOpen} onOpenChange={(open) => { setIsOpen(open); if (!open) resetForm(); }}>
           <DialogHeader>
-            <DialogTitle>Add Smart Product Purchase</DialogTitle>
+            <DialogTitle>{cfg.addDialogTitle}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={form.brand} onChange={setField("brand")} />
@@ -372,7 +375,7 @@ export const LightingPage: React.FC = () => {
 
       <Dialog open={editingEntry !== null} onOpenChange={(open) => !open && setEditingEntry(null)}>
         <DialogHeader>
-          <DialogTitle>Edit Smart Product Purchase</DialogTitle>
+          <DialogTitle>{cfg.editDialogTitle}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
           <AutoCompleteField label="Brand" required options={lookupsQuery.data?.brands ?? []} value={editForm.brand} onChange={setEditField("brand")} />
@@ -457,7 +460,7 @@ export const LightingPage: React.FC = () => {
       </Dialog>
 
       <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${isSuperAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-        <SummaryCard label="Total Entries" value={entries.length} icon={<Lightbulb size={18} />} />
+        <SummaryCard label="Total Entries" value={entries.length} icon={<EntryIcon size={18} />} />
         {isSuperAdmin && (
           <button type="button" onClick={() => setIsSummaryOpen(true)} className="block w-full text-left">
             <SummaryCard label="Total Profit" value={formatSGD(totalProfit)} sublabel="View summary report" icon={<DollarSign size={18} />} />
@@ -499,12 +502,12 @@ export const LightingPage: React.FC = () => {
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-lg border border-border bg-card shadow">
-          <EmptyState icon={<Lightbulb size={28} />} message="No lighting purchases recorded yet." />
+          <EmptyState icon={<EntryIcon size={28} />} message={`No ${cfg.entryNoun}s recorded yet.`} />
         </div>
       ) : visibleEntries.length === 0 ? (
         <div className="rounded-lg border border-border bg-card shadow">
           <EmptyState
-            icon={<Lightbulb size={28} />}
+            icon={<EntryIcon size={28} />}
             message={statusTab === "outstanding" ? "No outstanding entries." : "No completed entries yet."}
           />
         </div>
@@ -700,7 +703,7 @@ export const LightingPage: React.FC = () => {
         <SummaryReportDialog
           open={isSummaryOpen}
           onOpenChange={setIsSummaryOpen}
-          title="Smart Lighting Summary"
+          title={cfg.summaryTitle}
           entries={entries}
           getDate={(e) => e.date}
           renderStats={(filtered) => {

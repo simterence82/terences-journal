@@ -162,6 +162,21 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
+    // Miscellaneous Claims: an exact copy of the Smart Lighting arrangement
+    // above (same split, same Super Admin / Admin permissions), kept in its own
+    // collections so the two never mix.
+    match /miscPurchases/{id} {
+      allow get, list: if isApproved();
+      allow create: if isSuperAdmin();
+      allow update: if canEditRecord();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /miscFinancials/{id} {
+      allow get, list: if isSuperAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
     match /blumPurchases/{id} {
       allow get, list: if isApproved();
       allow create: if isApproved();

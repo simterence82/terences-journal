@@ -9,6 +9,7 @@ import type { PendingDeletion, PendingDeletionEntityKind } from "../lib/types";
 
 const COLLECTION: Record<PendingDeletionEntityKind, string> = {
   lighting: "lightingPurchases",
+  misc: "miscPurchases",
   blum: "blumPurchases",
   tasks: "tasks",
   issues: "issues",
@@ -69,8 +70,9 @@ async function loadRows(request: PendingDeletion): Promise<Row[] | null> {
         ["Resolved", yesNo(d.resolved)],
         ["Attachment", d.fileName ? <Link url={d.fileUrl} name={d.fileName} /> : "-"],
       ];
-    case "lighting": {
-      const fin = await getDoc(doc(db, "lightingFinancials", request.entityId)).catch(() => null);
+    case "lighting":
+    case "misc": {
+      const fin = await getDoc(doc(db, request.kind === "misc" ? "miscFinancials" : "lightingFinancials", request.entityId)).catch(() => null);
       const f = fin?.exists() ? fin.data() : null;
       const rows: Row[] = [
         ["Brand", text(d.brand)],

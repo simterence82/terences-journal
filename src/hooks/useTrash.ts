@@ -7,6 +7,7 @@ import type { TrashItem, TrashKind } from "../lib/types";
 
 const COLLECTION_BY_KIND: Record<TrashKind, string> = {
   lighting: "lightingPurchases",
+  misc: "miscPurchases",
   blum: "blumPurchases",
   tasks: "tasks",
   issues: "issues",
@@ -23,6 +24,8 @@ function buildItem(kind: TrashKind, id: string, data: Record<string, any>): Tras
   switch (kind) {
     case "lighting":
       return { kind, id, title: `${data.brand} - ${data.clientName}`, subtitle: "Smart Lighting Purchase", ...noFile, deletedAt, purgeAt };
+    case "misc":
+      return { kind, id, title: `${data.brand} - ${data.clientName}`, subtitle: "Miscellaneous Claim", ...noFile, deletedAt, purgeAt };
     case "blum":
       return { kind, id, title: data.orderName, subtitle: "Blum Purchase", ...noFile, deletedAt, purgeAt };
     case "tasks": {
@@ -86,6 +89,7 @@ export const usePermanentDeleteTrashItem = () =>
       if (kind === "tasks") await deleteDoc(doc(db, "taskFiles", id));
       if (kind === "issues") await deleteDoc(doc(db, "issueFiles", id));
       if (kind === "lighting") await deleteDoc(doc(db, "lightingFinancials", id));
+      if (kind === "misc") await deleteDoc(doc(db, "miscFinancials", id));
       return { success: true as const };
     },
   });

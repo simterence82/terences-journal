@@ -13,10 +13,9 @@ import { auth, db } from "../lib/firebase";
 import { toIso } from "../lib/firestoreUtil";
 import { useCollectionQuery } from "../lib/useFirestoreQuery";
 import { CLAIMED_KEYS, isBoth, readDual } from "../lib/dualConfirm";
+import { LIGHTING_SCOPES, type LightingScope } from "../lib/lightingScope";
 import type { LightingCostItem, LightingFinancials, LightingPurchase } from "../lib/types";
 
-const COLLECTION = "lightingPurchases";
-const FINANCIALS_COLLECTION = "lightingFinancials";
 
 function toLightingPurchase(id: string, data: Record<string, any>): LightingPurchase {
   const claimed = readDual(data, CLAIMED_KEYS);
@@ -56,9 +55,12 @@ function toLightingFinancials(id: string, data: Record<string, any>): LightingFi
   };
 }
 
-export const useLightingList = () =>
+// Every hook below takes a scope: "lighting" (Smart Lighting, the default) or
+// "misc" (Miscellaneous Claims) -- the same shape of record kept in its own
+// pair of collections.
+export const useLightingList = (scope: LightingScope = "lighting") =>
   useCollectionQuery(
-    () => query(collection(db, COLLECTION), where("isDeleted", "==", false)),
+    () => query(collection(db, LIGHTING_SCOPES[scope].purchases), where("isDeleted", "==", false)),
     toLightingPurchase,
     (a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0)
   );
@@ -66,9 +68,9 @@ export const useLightingList = () =>
 // Super Admin only -- the caller must pass whether the current user is
 // actually allowed to read this before enabling it, so Admin never even
 // attempts (and fails) the subscription.
-export const useLightingFinancialsList = (enabled: boolean) =>
+export const useLightingFinancialsList = (enabled: boolean, scope: LightingScope = "lighting") =>
   useCollectionQuery(
-    () => collection(db, FINANCIALS_COLLECTION),
+    () => collection(db, LIGHTING_SCOPES[scope].financials),
     toLightingFinancials,
     () => 0,
     { enabled }
@@ -90,11 +92,11 @@ export interface LightingCreateInput {
 // requires isSuperAdmin()) -- Admin cannot add Smart Lighting entries at
 // all, so there's no "write financials but can't read them back" path to
 // support here.
-export const useCreateLighting = () =>
+export const useCreateLighting = (scope: LightingScope = "lighting") =>
   useMutation({
     mutationFn: async (input: LightingCreateInput) => {
-      const opRef = doc(collection(db, COLLECTION));
-      const finRef = doc(db, FINANCIALS_COLLECTION, opRef.id);
+      const opRef = doc(collection(db, LIGHTING_SCOPES[scope].purchases));
+      const finRef = doc(db, LIGHTING_SCOPES[scope].financials, opRef.id);
       const batch = writeBatch(db);
       batch.set(opRef, {
         brand: input.brand,
@@ -141,7 +143,7 @@ const FINANCIAL_KEYS = new Set(["commissionGiven", "commissionRecipient", "commi
 // lightingFinancials. Admin-submitted updates never include a financial key
 // in the first place (the Edit dialog doesn't offer those fields to her),
 // so this never attempts a write she lacks permission for.
-export const useUpdateLighting = () =>
+export const useUpdateLighting = (scope: LightingScope = "lighting") =>
   useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & LightingUpdateInput) => {
       const operational: Record<string, unknown> = {};
@@ -158,17 +160,17 @@ export const useUpdateLighting = () =>
       }
 
       const writes: Promise<unknown>[] = [];
-      if (Object.keys(operational).length > 0) writes.push(updateDoc(doc(db, COLLECTION, id), operational));
-      if (Object.keys(financial).length > 0) writes.push(updateDoc(doc(db, FINANCIALS_COLLECTION, id), financial));
+      if (Object.keys(operational).length > 0) writes.push(updateDoc(doc(db, LIGHTING_SCOPES[scope].purchases, id), operational));
+      if (Object.keys(financial).length > 0) writes.push(updateDoc(doc(db, LIGHTING_SCOPES[scope].financials, id), financial));
       await Promise.all(writes);
       return { success: true as const };
     },
   });
 
-export const useDeleteLighting = () =>
+export const useDeleteLighting = (scope: LightingScope = "lighting") =>
   useMutation({
     mutationFn: async (id: string) => {
-      await updateDoc(doc(db, COLLECTION, id), { isDeleted: true, deletedAt: serverTimestamp() });
+      await updateDoc(doc(db, LIGHTING_SCOPES[scope].purchases, id), { isDeleted: true, deletedAt: serverTimestamp() });
       return { success: true as const };
     },
   });

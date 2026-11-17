@@ -7,6 +7,7 @@ import type { PendingDeletion, PendingDeletionAction, PendingDeletionEntityKind 
 
 const HARD_DELETE_COLLECTION: Record<PendingDeletionEntityKind, string> = {
   lighting: "lightingPurchases",
+  misc: "miscPurchases",
   blum: "blumPurchases",
   tasks: "tasks",
   issues: "issues",

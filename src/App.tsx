@@ -4,6 +4,7 @@ import { LoginPage } from "./pages/Login";
 import { DashboardPage } from "./pages/Dashboard";
 import { LightingPage } from "./pages/Lighting";
 import { BlumPage } from "./pages/Blum";
+import { MiscClaimsPage } from "./pages/MiscClaims";
 import { TasksPage } from "./pages/Tasks";
 import { IssuesPage } from "./pages/Issues";
 import { SchedulePage } from "./pages/Schedule";
@@ -35,7 +36,7 @@ export const App: React.FC = () => (
       path="/lighting"
       element={
         <ProtectedRoute roles={["superadmin", "admin", "member"]}>
-          <LightingPage />
+          <LightingPage key="lighting" />
         </ProtectedRoute>
       }
     />
@@ -44,6 +45,14 @@ export const App: React.FC = () => (
       element={
         <ProtectedRoute roles={["superadmin", "admin", "member"]}>
           <BlumPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/misc-claims"
+      element={
+        <ProtectedRoute roles={["superadmin", "admin", "member"]}>
+          <MiscClaimsPage />
         </ProtectedRoute>
       }
     />
